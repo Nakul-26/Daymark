@@ -3,7 +3,7 @@ import { h, modal } from "./ui.js";
 import { state } from "./state.js";
 import { actions } from "./actions.js";
 import { DOW } from "./datemath.js";
-import { isoDay } from "./time.js";
+import { isoDay, addDays } from "./time.js";
 
 const PRESETS = [[0, "At time of task"], [10, "10 minutes before"], [30, "30 minutes before"], [60, "1 hour before"], [1440, "1 day before"]];
 const UNITS = { daily: "days", weekly: "weeks", monthly: "months", yearly: "years" };
@@ -15,8 +15,8 @@ export function openTask(id) {
   const isSub = !!t.parent_id;
 
   // --- fields ---
-  const title = h("input", { value: t.title, maxlength: 240, "aria-label": "Title" });
-  const notes = h("textarea", { rows: 3, placeholder: "Details" }, t.notes);
+  const title = h("input", { class: "task-title", value: t.title, maxlength: 240, "aria-label": "Title" });
+  const notes = h("textarea", { class: "task-notes", rows: 3, placeholder: "Add details" }, t.notes);
   const due = h("input", { type: "date", value: t.due || "" });
   const time = h("input", { type: "time", value: t.due_time || "" });
   const list = h("select", { disabled: isSub }, state.lists.map(l => h("option", { value: l.id, selected: l.id === t.list_id }, l.name)));
@@ -90,6 +90,14 @@ export function openTask(id) {
   };
   const buildReminders = () => [...picked].map(k => (k[0] === "o" ? { offset_min: Number(k.slice(2)) } : { custom_local: k.slice(2) }));
 
+  const quick = [];
+  const syncQuick = () => quick.forEach(([b, day]) => b.classList.toggle("on", due.value === day));
+  const quickDate = (label, day) => {
+    const b = h("button", { type: "button", class: "pill", onclick: () => { due.value = day; drawReminders(); syncQuick(); } }, label);
+    quick.push([b, day]);
+    return b;
+  };
+
   let close;
   modal(c => {
     close = c;
@@ -102,21 +110,27 @@ export function openTask(id) {
         if (v === "complete") actions.toggle(t);
       },
     },
-      h("div", { class: "row" }, title,
-        h("button", { type: "button", class: "star" + (t.starred ? " on" : ""), title: "Star", onclick: async e => { await actions.star(t); t = state.tasks.find(x => x.id === t.id); e.target.className = "star" + (t.starred ? " on" : ""); e.target.textContent = t.starred ? "★" : "☆"; } }, t.starred ? "★" : "☆")),
+      h("div", { class: "dlg-head" }, title,
+        h("button", { type: "button", class: "star" + (t.starred ? " on" : ""), title: "Star", "aria-label": "Star", onclick: async e => { await actions.star(t); t = state.tasks.find(x => x.id === t.id); e.target.className = "star" + (t.starred ? " on" : ""); e.target.textContent = t.starred ? "★" : "☆"; } }, t.starred ? "★" : "☆"),
+        h("button", { type: "button", class: "x", title: "Close", "aria-label": "Close", onclick: () => close() }, "×")),
       notes,
-      h("div", { class: "grid2" },
-        h("label", {}, "Date", due, h("button", { type: "button", class: "link", onclick: () => { due.value = ""; time.value = ""; freq.value = ""; syncRepeat(); drawReminders(); } }, "Clear")),
-        h("label", {}, "Time", time)),
-      !isSub && h("label", {}, "Repeat", freq),
-      !isSub && repeatDetail, !isSub && dayBtns,
+      h("div", { class: "block" },
+        h("div", { class: "block-title" }, "When"),
+        h("div", { class: "grid2" }, h("label", {}, "Date", due), h("label", {}, "Time", time)),
+        h("div", { class: "pills" },
+          quickDate("Today", isoDay()), quickDate("Tomorrow", addDays(isoDay(), 1)), quickDate("Next week", addDays(isoDay(), 7)),
+          h("button", { type: "button", class: "link", onclick: () => { due.value = ""; time.value = ""; freq.value = ""; syncRepeat(); drawReminders(); syncQuick(); } }, "Clear date"))),
+      !isSub && h("div", { class: "block" },
+        h("label", {}, "Repeat", freq), repeatDetail, dayBtns),
       !isSub && h("label", {}, "List", list),
-      !isSub && h("fieldset", {}, h("legend", {}, "Reminders"), remDiv),
-      !isSub && h("fieldset", {}, h("legend", {}, "Subtasks"), subsDiv,
+      !isSub && h("details", { class: "block", open: picked.size > 0 }, h("summary", {}, "🔔 Reminders"), remDiv),
+      !isSub && h("div", { class: "block" }, h("div", { class: "block-title" }, "Subtasks"), subsDiv,
         h("div", { class: "row" }, newSub, h("button", { type: "button", onclick: addSub }, "Add"))),
       t.done_at && h("p", { class: "hint" }, "Completed " + new Date(t.done_at).toLocaleString()),
       h("div", { class: "row actions" },
         h("button", { value: "delete", formnovalidate: true, class: "danger" }, "Delete"),
+        isSub && h("button", { type: "button", title: "Make this a normal task (Ctrl+[)", onclick: () => { close(); actions.unindent(t); } }, "⇤ Unindent"),
+        !isSub && !t.done_at && h("button", { type: "button", title: "Make this a subtask of the task above (Ctrl+])", onclick: () => { close(); actions.indentAbove(t); } }, "⇥ Indent"),
         !isSub && h("button", { type: "button", title: "Move up", onclick: () => actions.nudge(t, -1) }, "↑"),
         !isSub && h("button", { type: "button", title: "Move down", onclick: () => actions.nudge(t, 1) }, "↓"),
         h("span", { class: "grow" }),
@@ -127,5 +141,6 @@ export function openTask(id) {
     return body;
   });
   syncRepeat(); drawReminders(); drawSubs();
-  due.addEventListener("change", drawReminders);
+  due.addEventListener("change", () => { drawReminders(); syncQuick(); });
+  syncQuick();
 }

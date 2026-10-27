@@ -112,3 +112,19 @@ test("settings validate", () => {
   assert.equal(r("settings", "PUT /api/settings")({ body: { summary_time: "07:15" } }).summary_time, "07:15");
   assert.equal(getSetting("timezone"), "Asia/Kolkata");
 });
+
+test("tasks: indent under a task, unindent back; subtasks lose their repeat", () => {
+  const mk = body => r("tasks", "POST /api/tasks")({ body });
+  const patch = (id, body) => r("tasks", "PATCH /api/tasks/:id")({ params: { id }, body });
+  const parent = mk({ title: "Indent parent" });
+  const kid = mk({ title: "Indent kid", due: today, repeat: { freq: "daily", interval: 1 } });
+  const moved = patch(kid.id, { parent_id: parent.id, position: 1 });
+  assert.equal(moved.parent_id, parent.id);
+  assert.equal(moved.list_id, parent.list_id);
+  assert.equal(moved.repeat, null);
+  const back = patch(kid.id, { parent_id: null });
+  assert.equal(back.parent_id, null);
+  const other = mk({ title: "Has a kid" });
+  mk({ title: "its kid", parent_id: other.id });
+  assert.throws(() => patch(other.id, { parent_id: parent.id }), /subtasks can't become a subtask/);
+});

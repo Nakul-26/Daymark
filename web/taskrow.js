@@ -4,6 +4,7 @@ import { state } from "./state.js";
 import { actions } from "./actions.js";
 import { isoDay, dueLabel, repeatLabel } from "./time.js";
 import { openTask } from "./taskdialog.js";
+import { rowKey } from "./shortcuts.js";
 
 // ctx: { showList?: bool, order?: number[] }  (order = ids in display order: enables drag to reorder)
 export function taskRow(entry, ctx = {}) {
@@ -27,10 +28,7 @@ export function taskRow(entry, ctx = {}) {
     class: "task" + (done ? " done" : "") + (t.parent_id && !parent ? " sub" : ""),
     tabindex: 0, "data-id": t.id,
     onkeydown: e => {
-      if (e.target !== li) return;
-      if (e.key === "Enter") openTask(t.id);
-      if (e.altKey && e.key === "ArrowUp") { e.preventDefault(); actions.nudge(t, -1); }
-      if (e.altKey && e.key === "ArrowDown") { e.preventDefault(); actions.nudge(t, 1); }
+      if (e.target === li && rowKey(e, t, li)) e.preventDefault();
     },
   },
     h("div", { class: "main" },

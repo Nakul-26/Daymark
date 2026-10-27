@@ -98,6 +98,7 @@ export default {
         if (p.id === cur.id || p.parent_id) throw httpError(400, "Invalid parent");
         if (childrenOf(cur.id).length) throw httpError(400, "A task with subtasks can't become a subtask");
         out.list_id = p.list_id;
+        out.repeat = null; // subtasks never repeat
       }
       normalise(out, ser(cur));
       if (out.repeat && !(out.due ?? cur.due)) out.due = today();

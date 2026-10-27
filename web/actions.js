@@ -4,6 +4,7 @@ import { api } from "./api.js";
 import { state, render, loadAll } from "./state.js";
 import { toast } from "./ui.js";
 import { isoDay, dueLabel } from "./time.js";
+import { moveToEdge, placeAfter } from "./order.js";
 
 // Run an async change. On failure: tell the user and re-sync from the server.
 async function act(fn) {
@@ -74,14 +75,44 @@ export const actions = {
     await api.reorder(ids);
   }),
 
-  // move one step up (-1) or down (+1) among the open top-level tasks of its list
+  // Open tasks of the same list and parent, in "My order".
+  siblings: t => state.tasks.filter(x => !x.done_at && x.list_id === t.list_id && x.parent_id === t.parent_id)
+    .sort((a, b) => a.position - b.position || b.id - a.id),
+
+  // move one step up (-1) or down (+1) among its siblings
   nudge: (t, dir) => {
-    const sibs = state.tasks.filter(x => !x.done_at && x.list_id === t.list_id && x.parent_id === t.parent_id)
-      .sort((a, b) => a.position - b.position || b.id - a.id);
+    const sibs = actions.siblings(t);
     const i = sibs.findIndex(x => x.id === t.id), j = i + dir;
     if (i < 0 || j < 0 || j >= sibs.length) return;
     [sibs[i], sibs[j]] = [sibs[j], sibs[i]];
     return actions.reorder(sibs.map(x => x.id));
+  },
+
+  moveEdge: (t, edge) => actions.reorder(moveToEdge(actions.siblings(t).map(x => x.id), t.id, edge)),
+
+  // Make `t` the last subtask of the task `parentId` (Ctrl+] / "Indent").
+  indent: (t, parentId) => {
+    const p = state.tasks.find(x => x.id === parentId);
+    if (!p || t.parent_id || p.parent_id || p.id === t.id) return;
+    if (p.list_id !== t.list_id) return toast("Can only indent under a task in the same list", { error: true });
+    if (subtasksOf(t.id).length) return toast("A task with subtasks can't become a subtask", { error: true });
+    const last = subtasksOf(p.id).reduce((m, s) => Math.max(m, s.position), 0);
+    return act(async () => { put(state.tasks, await api.patchTask(t.id, { parent_id: p.id, position: last + 1 })); });
+  },
+  // Indent under the task above it in "My order" (for the dialog button, where there's no row to look at).
+  indentAbove: t => {
+    const s = actions.siblings(t), i = s.findIndex(x => x.id === t.id);
+    return i > 0 ? actions.indent(t, s[i - 1].id) : toast("No task above to indent under", { error: true });
+  },
+  // Turn a subtask back into a normal task, placed right after its former parent (Ctrl+[).
+  unindent: t => {
+    if (!t.parent_id) return;
+    const parentId = t.parent_id;
+    return act(async () => {
+      put(state.tasks, await api.patchTask(t.id, { parent_id: null }));
+      const parent = state.tasks.find(x => x.id === parentId);
+      if (parent) await actions.reorder(placeAfter(actions.siblings(parent).map(x => x.id), parent.id, t.id));
+    });
   },
 
   // ---- lists ----

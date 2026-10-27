@@ -4,7 +4,8 @@ import { api } from "./api.js";
 import { state, setRenderer, render, loadAll } from "./state.js";
 import { refreshNotifications } from "./actions.js";
 import { actions } from "./actions.js";
-import { h, toast, isTyping } from "./ui.js";
+import { h, toast, isTyping, undoLast } from "./ui.js";
+import { showShortcuts } from "./shortcuts.js";
 import { VIEWS } from "./views.js";
 import { isoDay } from "./time.js";
 import { renderTasks, allViews } from "./pages/tasks.js";
@@ -90,6 +91,7 @@ function draw() {
 
   const page = PAGES[state.route] ? PAGES[state.route]() : renderTasks(state.route);
   const keep = document.activeElement?.id;
+  const keepRow = document.activeElement?.matches?.("li.task") ? document.activeElement.dataset.id : null;
   const scroll = document.getElementById("main")?.scrollTop ?? 0;
   const main = h("main", { id: "main" }, page);
   root.replaceChildren(side, main, state.menu ? h("div", { class: "scrim", onclick: () => { state.menu = false; draw(); } }) : "");
@@ -97,13 +99,18 @@ function draw() {
 
   // keep typing flow: re-focus the box the user was in, otherwise focus the add box on desktop
   const again = keep && document.getElementById(keep);
-  if (again) { again.focus(); if (again.setSelectionRange && again.type === "search") again.setSelectionRange(1e4, 1e4); }
+  const row = keepRow && main.querySelector(`li.task[data-id="${keepRow}"]`);
+  if (row) row.focus();
+  else if (again) { again.focus(); if (again.setSelectionRange && again.type === "search") again.setSelectionRange(1e4, 1e4); }
   else if (matchMedia("(hover: hover)").matches && !document.querySelector("dialog[open]")) document.getElementById("add-input")?.focus();
   document.title = unreadCount() ? `(${unreadCount()}) Daymark` : "Daymark";
 }
 
 // ---------- keyboard ----------
 document.addEventListener("keydown", e => {
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && e.key === "/") { e.preventDefault(); showShortcuts(); return; }
+  if (mod && !e.shiftKey && e.key.toLowerCase() === "z" && !isTyping(e.target) && !document.querySelector("dialog[open]")) { if (undoLast()) e.preventDefault(); return; }
   if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target) || document.querySelector("dialog[open]")) {
     if (e.key === "Escape" && e.target.id === "search-input") { state.query = ""; render(); }
     return;

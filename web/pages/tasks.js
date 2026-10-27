@@ -28,16 +28,20 @@ export function viewDefaults(view, today = isoDay()) {
 
 export function addForm(defaults) {
   const input = h("input", { id: "add-input", class: "add", placeholder: "Add a task…   e.g. “Call mom tomorrow 5pm !”", maxlength: 240, autocomplete: "off" });
+  const button = h("button", { class: "primary", type: "submit", disabled: true }, "Add");
+  input.addEventListener("input", () => (button.disabled = !input.value.trim()));
   return h("form", {
+    class: "add-row",
     onsubmit: e => {
       e.preventDefault();
       const text = input.value.trim();
       if (!text) return;
       input.value = "";
+      button.disabled = true;
       const parsed = parseQuick(text, isoDay());
       actions.addTask({ ...defaults, ...parsed });
     },
-  }, input);
+  }, input, button);
 }
 
 export function renderTasks(route) {

@@ -14,15 +14,26 @@ export function h(tag, props = {}, ...kids) {
 }
 
 // Bottom toast. toast("Deleted", { undo: fn }) shows an Undo button for 8s.
-let toastEl, toastTimer;
+let toastEl, toastTimer, lastUndo;
 export function toast(message, { undo, error } = {}) {
   toastEl?.remove();
   clearTimeout(toastTimer);
+  lastUndo = undo ?? null;
   toastEl = h("div", { class: "toast" + (error ? " error" : ""), role: "status" }, h("span", {}, message),
     undo ? h("button", { onclick: () => { toastEl.remove(); undo(); } }, "Undo") : null,
     h("button", { class: "x", "aria-label": "Dismiss", onclick: () => toastEl.remove() }, "×"));
   document.body.append(toastEl);
   toastTimer = setTimeout(() => toastEl?.remove(), undo ? 8000 : 4000);
+}
+
+// Ctrl+Z: run the Undo of the toast that's showing, if any.
+export function undoLast() {
+  if (!toastEl?.isConnected || !lastUndo) return false;
+  const fn = lastUndo;
+  toastEl.remove();
+  lastUndo = null;
+  fn();
+  return true;
 }
 
 // Open a modal <dialog>. `build(close)` returns the dialog's content element.

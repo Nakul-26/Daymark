@@ -181,3 +181,31 @@ dialog::backdrop { background: #0006; }
 
 /* habits aren't "finished" like tasks: no strike-through */
 .habit.done .title { text-decoration: none; color: inherit; }
+
+.shortcuts h4 { margin: 10px 0 4px; font-size: 13px; color: var(--muted); }
+.shortcuts dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0; }
+.shortcuts dt, .shortcuts dd { margin: 0; font-size: 14px; }
+.shortcuts kbd { font: 12px ui-monospace, monospace; background: var(--line); border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
+
+/* add row */
+.add-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.add-row .add { flex: 1; width: auto; margin: 0; }
+.add-row button { padding: 0 20px; border-radius: var(--radius); font-weight: 600; }
+
+/* task dialog */
+dialog[open] { animation: pop .12s ease-out; }
+@keyframes pop { from { opacity: 0; transform: translateY(8px); } }
+@media (prefers-reduced-motion: reduce) { dialog[open] { animation: none; } }
+.dlg-head { display: flex; align-items: center; gap: 4px; }
+.task-title { flex: 1; min-width: 0; font-size: 19px; font-weight: 600; background: transparent; border-color: transparent; padding: 6px 8px; }
+.task-notes { background: transparent; border-color: transparent; padding: 6px 8px; min-height: 64px; resize: vertical; }
+.task-title:hover, .task-notes:hover { border-color: var(--line); }
+.task-title:focus, .task-notes:focus { background: var(--panel); border-color: var(--line); outline: none; }
+.dlg-head .star { font-size: 22px; padding: 0 6px; }
+.task-form .block { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.block-title, details.block > summary { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+details.block > summary { cursor: pointer; }
+details.block[open] > summary { margin-bottom: 6px; }
+.task-form .pills { margin: 0; align-items: center; }
+.task-form .actions { position: sticky; bottom: -18px; margin: 6px -18px -18px; padding: 12px 18px; background: var(--bg); border-top: 1px solid var(--line); border-radius: 0 0 14px 14px; }
+.task-form .actions button.primary { padding: 6px 20px; font-weight: 600; }
