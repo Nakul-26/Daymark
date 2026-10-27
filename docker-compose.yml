@@ -1,0 +1,12 @@
+services:
+  daymark:
+    build: .
+    restart: unless-stopped
+    environment:
+      PASSWORD: ${PASSWORD:?set PASSWORD in .env}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      TZ_DEFAULT: ${TZ_DEFAULT:-Asia/Kolkata}
+    volumes:
+      - ./data:/data          # database + backups: back this folder up
+    ports:
+      - "127.0.0.1:8080:3000" # point the Cloudflare tunnel at http://127.0.0.1:8080
