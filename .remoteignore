@@ -1,0 +1,3 @@
+# Extra files that must NOT be copied to the college server (one rsync pattern per line).
+# .env*, *.pem, *.key, .npmrc, .git, node_modules, .venv and outputs are already excluded.
+data/
