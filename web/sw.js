@@ -19,18 +19,27 @@ self.addEventListener("fetch", e => {
 
 self.addEventListener("push", e => {
   let data = {};
-  try { data = e.data.json(); } catch { data = { title: "Daymark", body: e.data?.text() || "" }; }
+  try { data = e.data.json(); } catch { data = { title: "Daymark", body: e.data?.text() || "You have a reminder" }; }
   e.waitUntil(self.registration.showNotification(data.title || "Daymark", {
-    body: data.body || "", tag: data.tag, icon: "/icon.svg", badge: "/icon.svg", data: { url: data.url || "/" },
+    body: data.body || "", tag: data.tag, icon: "/icon-192.png", badge: "/badge-96.png", timestamp: Date.now(),
+    data: { url: data.url || "/", taskId: data.task_id || null },
+    ...(data.task_id && { actions: [{ action: "done", title: "Mark done" }] }),
   }));
 });
 
 self.addEventListener("notificationclick", e => {
   e.notification.close();
-  const url = e.notification.data?.url || "/";
-  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async list => {
-    const win = list.find(c => new URL(c.url).origin === location.origin);
+  const { url = "/", taskId } = e.notification.data || {};
+  e.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    if (e.action === "done" && taskId) { // finish the task without opening the app
+      try {
+        const res = await fetch(`/api/tasks/${taskId}/complete`, { method: "POST", headers: { "X-Requested-With": "daymark", "Content-Type": "application/json" }, body: "{}" });
+        if (res.ok) { wins.forEach(c => c.postMessage({ type: "tasks-changed" })); return; }
+      } catch { /* offline or signed out: open the app instead */ }
+    }
+    const win = wins.find(c => new URL(c.url).origin === location.origin);
     if (win) { await win.focus(); return win.navigate(url); }
     return self.clients.openWindow(url);
-  }));
+  })());
 });

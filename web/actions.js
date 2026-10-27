@@ -53,7 +53,7 @@ export const actions = {
     const { task, next } = await api.completeTask(t.id);
     put(state.tasks, task);
     if (next) { state.tasks = await api.tasks(); await refreshReminders(); }
-    toast(next ? `Done. Next: ${dueLabel(next.due, next.due_time)}` : "Task completed", {
+    toast(next ? `Done. Next: ${dueLabel(next.due, next.due_time)}` : t.repeat && !t.parent_id ? "Done. That was the last repeat" : "Task completed", {
       undo: () => act(async () => {
         put(state.tasks, await api.reopenTask(t.id, next?.id));
         if (next) { state.tasks = await api.tasks(); await refreshReminders(); }
@@ -94,6 +94,7 @@ export const actions = {
   indent: (t, parentId) => {
     const p = state.tasks.find(x => x.id === parentId);
     if (!p || t.parent_id || p.parent_id || p.id === t.id) return;
+    if (p.repeat) return toast("Repeating tasks can't have subtasks", { error: true });
     if (p.list_id !== t.list_id) return toast("Can only indent under a task in the same list", { error: true });
     if (subtasksOf(t.id).length) return toast("A task with subtasks can't become a subtask", { error: true });
     const last = subtasksOf(p.id).reduce((m, s) => Math.max(m, s.position), 0);

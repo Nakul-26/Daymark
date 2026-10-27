@@ -9,10 +9,23 @@
 import { db } from "../../core/db.js";
 import { httpError } from "../../core/router.js";
 import { events } from "../../core/events.js";
-import { localToUtc, validDay, validTime } from "../../core/time.js";
+import { addDays, dayIn, localToUtc, validDay, validTime } from "../../core/time.js";
 import { getSetting } from "../settings/index.js";
 import { createNotification } from "../notifications/index.js";
 import { pushToAll } from "../push/index.js";
+
+const clock12 = hhmm => { const [h, m] = hhmm.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`; };
+
+// What a notification says under the task title: "Today, 5:00 PM · My Tasks".
+export function reminderBody(task, listName, today) {
+  let when = "";
+  if (task.due) {
+    const day = task.due === today ? "Today" : task.due === addDays(today, 1) ? "Tomorrow" : task.due === addDays(today, -1) ? "Yesterday"
+      : new Date(task.due + "T12:00Z").toLocaleDateString("en", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+    when = task.due_time ? `${day}, ${clock12(task.due_time)}` : day;
+  }
+  return [when, listName].filter(Boolean).join(" · ");
+}
 
 const OFFSETS = [0, 5, 10, 15, 30, 60, 120, 1440, 2880];
 
@@ -71,12 +84,12 @@ export async function tick() {
       if (now - new Date(r.remind_at) > catchUp) { finish("expired"); continue; }
 
       let nid = r.notification_id;
-      const body = task.due ? `Due ${task.due}${task.due_time ? " " + task.due_time : ""}` : "";
+      const body = reminderBody(task, db.prepare("SELECT name FROM lists WHERE id=?").get(task.list_id)?.name, dayIn(getSetting("timezone")));
       if (!nid) {
         nid = createNotification({ type: "reminder", title: task.title, body, task_id: task.id });
         db.prepare("UPDATE reminders SET notification_id=? WHERE id=?").run(nid, r.id);
       }
-      const res = await pushToAll({ title: task.title, body, url: `/#/task/${task.id}`, tag: `reminder-${r.id}` });
+      const res = await pushToAll({ title: task.title, body, url: `/#/task/${task.id}`, tag: `reminder-${r.id}`, task_id: task.id });
       if (!res.transient) { finish("sent", `, sent_at='${nowIso}'`); continue; }
       const attempts = r.attempts + 1;
       if (attempts >= 5) { finish("failed", ", last_error='push failed 5 times'"); continue; }

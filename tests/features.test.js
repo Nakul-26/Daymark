@@ -128,3 +128,57 @@ test("tasks: indent under a task, unindent back; subtasks lose their repeat", ()
   mk({ title: "its kid", parent_id: other.id });
   assert.throws(() => patch(other.id, { parent_id: parent.id }), /subtasks can't become a subtask/);
 });
+
+test("repeat: ends after N occurrences", () => {
+  const mk = body => r("tasks", "POST /api/tasks")({ body });
+  const done = id => r("tasks", "POST /api/tasks/:id/complete")({ params: { id } });
+  const t = mk({ title: "Three times", due: today, repeat: { freq: "daily", interval: 1, end: { count: 3 } } });
+  const second = done(t.id).next;
+  assert.deepEqual(second.repeat.end, { count: 2 });
+  const third = done(second.id).next;
+  assert.deepEqual(third.repeat.end, { count: 1 });
+  assert.equal(done(third.id).next, null); // series over
+});
+
+test("repeat: ends on a date", () => {
+  const t = r("tasks", "POST /api/tasks")({ body: { title: "Until", due: today, repeat: { freq: "daily", interval: 1, end: { on: addDays(today, 1) } } } });
+  const second = r("tasks", "POST /api/tasks/:id/complete")({ params: { id: t.id } }).next;
+  assert.equal(second.due, addDays(today, 1));
+  assert.equal(r("tasks", "POST /api/tasks/:id/complete")({ params: { id: second.id } }).next, null);
+});
+
+test("repeat: moving one occurrence's date keeps the series schedule; changing the pattern restarts it", () => {
+  const patch = (id, body) => r("tasks", "PATCH /api/tasks/:id")({ params: { id }, body });
+  const t = r("tasks", "POST /api/tasks")({ body: { title: "Daily anchor", due: today, repeat: { freq: "daily", interval: 1 } } });
+  patch(t.id, { due: addDays(today, 5) }); // only this occurrence moves
+  const next = r("tasks", "POST /api/tasks/:id/complete")({ params: { id: t.id } }).next;
+  assert.equal(next.due, addDays(today, 1)); // still the original daily schedule
+  const u = patch(next.id, { due: addDays(today, 3), repeat: { freq: "daily", interval: 2 } }); // new pattern
+  const after = r("tasks", "POST /api/tasks/:id/complete")({ params: { id: u.id } }).next;
+  assert.equal(after.due, addDays(today, 5)); // restarted from the edited date
+  const kept = patch(after.id, { repeat: { freq: "daily", interval: 2, end: { count: 4 } } }); // only the end changed
+  assert.equal(r("tasks", "POST /api/tasks/:id/complete")({ params: { id: kept.id } }).next.due, addDays(today, 7));
+});
+
+test("repeat: Google Tasks limits (no subtasks, no list change); stop repeating", () => {
+  const mk = body => r("tasks", "POST /api/tasks")({ body });
+  const patch = (id, body) => r("tasks", "PATCH /api/tasks/:id")({ params: { id }, body });
+  const rep = mk({ title: "Rep limits", due: today, repeat: { freq: "weekly", interval: 1 } });
+  assert.throws(() => mk({ title: "kid", parent_id: rep.id }), /Repeating tasks can't have subtasks/);
+  const other = r("lists", "POST /api/lists")({ body: { name: "Other" } });
+  assert.throws(() => patch(rep.id, { list_id: other.id }), /can't be moved/);
+  const plain = mk({ title: "Plain parent", due: today });
+  mk({ title: "its kid", parent_id: plain.id });
+  assert.throws(() => patch(plain.id, { repeat: { freq: "daily", interval: 1 } }), /subtasks can't repeat/);
+  assert.equal(patch(rep.id, { repeat: null }).repeat, null);
+  assert.equal(patch(rep.id, { list_id: other.id }).list_id, other.id); // fine once it stopped repeating
+});
+
+test("reminder text reads like a task app, not a timestamp", async () => {
+  const { reminderBody } = await import("../features/reminders/index.js");
+  assert.equal(reminderBody({ due: today, due_time: "17:05" }, "My Tasks", today), "Today, 5:05 PM · My Tasks");
+  assert.equal(reminderBody({ due: addDays(today, 1), due_time: "00:30" }, "Work", today), "Tomorrow, 12:30 AM · Work");
+  assert.equal(reminderBody({ due: today }, "My Tasks", today), "Today · My Tasks");
+  assert.equal(reminderBody({ due: null }, "My Tasks", today), "My Tasks");
+  assert.match(reminderBody({ due: addDays(today, 9), due_time: "12:00" }, "", today), /^\w{3}, \w{3} \d+, 12:00 PM$/);
+});

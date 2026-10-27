@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { localToUtc, nextAfter, nextOccurrence, validRule, addDays, dayIn } from "../core/time.js";
+import { localToUtc, nextAfter, nextOccurrence, nextRuleFor, sameSchedule, validRule, addDays, dayIn } from "../core/time.js";
 
 test("localToUtc handles India (+5:30) and New York DST", () => {
   assert.equal(localToUtc("2026-10-20", "10:00", "Asia/Kolkata"), "2026-10-20T04:30:00.000Z");
@@ -30,4 +30,20 @@ test("validRule normalises", () => {
   assert.equal(validRule({ freq: "hourly" }), null);
   assert.equal(addDays("2026-12-31", 1), "2027-01-01");
   assert.match(dayIn("Asia/Kolkata"), /^\d{4}-\d{2}-\d{2}$/);
+});
+
+test("repeat end: validRule, nextRuleFor, sameSchedule", () => {
+  const base = { freq: "daily", interval: 1 };
+  assert.deepEqual(validRule({ ...base, end: { on: "2026-12-01" } }).end, { on: "2026-12-01" });
+  assert.deepEqual(validRule({ ...base, end: { count: "3" } }).end, { count: 3 });
+  assert.equal(validRule({ ...base, end: { on: "nope" } }).end, undefined);
+  assert.equal(validRule({ ...base, end: { count: 0 } }).end, undefined);
+  assert.equal(nextRuleFor(base, "2026-12-01"), base); // no end: unchanged
+  assert.deepEqual(nextRuleFor({ ...base, end: { count: 3 } }, "x"), { ...base, end: { count: 2 } });
+  assert.equal(nextRuleFor({ ...base, end: { count: 1 } }, "x"), null);
+  assert.ok(nextRuleFor({ ...base, end: { on: "2026-12-01" } }, "2026-12-01"));
+  assert.equal(nextRuleFor({ ...base, end: { on: "2026-12-01" } }, "2026-12-02"), null);
+  assert.ok(sameSchedule(base, { ...base, end: { count: 5 } }));
+  assert.ok(!sameSchedule(base, { ...base, interval: 2 }));
+  assert.ok(!sameSchedule({ freq: "weekly", interval: 1, days: [1] }, { freq: "weekly", interval: 1, days: [2] }));
 });

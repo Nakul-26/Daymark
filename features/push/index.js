@@ -61,7 +61,7 @@ export default {
       return { ok: true };
     },
     "POST /api/push/test": async () => {
-      const r = await pushToAll({ title: "Daymark", body: "Test notification: push works.", url: "/#/notifications" });
+      const r = await pushToAll({ title: "Notifications are on ✓", body: "Daymark can now remind you of your tasks on this device.", url: "/#/notifications" });
       if (!r.sent) throw httpError(400, "No device received it. Enable notifications on a device first.");
       return r;
     },

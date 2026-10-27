@@ -52,6 +52,23 @@ export function validRule(r) {
   const rule = { freq: r.freq, interval };
   if (r.freq === "weekly" && Array.isArray(r.days) && r.days.length)
     rule.days = [...new Set(r.days.map(Number).filter(d => d >= 0 && d <= 6))].sort();
+  // Optional end (Google Tasks "Ends"): { on: "YYYY-MM-DD" } or { count: N } = N occurrences left, counting the current one.
+  if (r.end && typeof r.end === "object") {
+    if (validDay(r.end.on)) rule.end = { on: r.end.on };
+    else if (Number(r.end.count) >= 1) rule.end = { count: Math.min(999, Math.floor(Number(r.end.count))) };
+  }
+  return rule;
+}
+
+// Same repeat pattern, ignoring when it ends (editing only the end must not restart the series).
+export const sameSchedule = (a, b) => !!a && !!b && a.freq === b.freq && a.interval === b.interval
+  && JSON.stringify(a.days ?? []) === JSON.stringify(b.days ?? []);
+
+// The rule the next occurrence carries, or null when the series ends before `nextDue`.
+export function nextRuleFor(rule, nextDue) {
+  const end = rule.end;
+  if (end?.on && nextDue > end.on) return null;
+  if (end?.count != null) return end.count <= 1 ? null : { ...rule, end: { count: end.count - 1 } };
   return rule;
 }
 

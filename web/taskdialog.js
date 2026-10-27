@@ -33,11 +33,37 @@ export function openTask(id) {
     onclick: e => { weekDays.has(i) ? weekDays.delete(i) : weekDays.add(i); e.target.classList.toggle("on"); },
   }, d[0])));
   const repeatDetail = h("div", { class: "row" }, "Every ", interval, unit);
+  // "Ends": Never / On a date / After N occurrences (the current one counts)
+  const end = rule?.end;
+  const endKind = h("select", {}, [["", "Never"], ["on", "On date"], ["after", "After"]]
+    .map(([v, l]) => h("option", { value: v, selected: (end?.on ? "on" : end?.count != null ? "after" : "") === v }, l)));
+  const endDate = h("input", { type: "date", value: end?.on || "" });
+  const endCount = h("input", { type: "number", min: 1, max: 999, value: end?.count ?? 10, class: "narrow" });
+  const endUnit = h("span", {}, " occurrences");
+  const endRow = h("div", { class: "row" }, "Ends ", endKind, endDate, endCount, endUnit);
+  const limits = h("p", { class: "hint" });
+  const hasSubs = () => state.tasks.some(s => s.parent_id === t.id);
   const syncRepeat = () => {
-    repeatDetail.hidden = !freq.value;
+    repeatDetail.hidden = endRow.hidden = !freq.value;
     dayBtns.hidden = freq.value !== "weekly";
     unit.textContent = " " + (UNITS[freq.value] || "");
+    endDate.hidden = endKind.value !== "on";
+    endCount.hidden = endUnit.hidden = endKind.value !== "after";
+    endDate.min = due.value;
+    // Google Tasks: tasks with subtasks can't repeat; repeating tasks can't have subtasks or change list
+    freq.disabled = hasSubs();
+    list.disabled = isSub || !!freq.value;
+    if (freq.value) list.value = String(t.list_id);
+    newSub.disabled = addSubBtn.disabled = !!freq.value;
+    limits.textContent = hasSubs() ? "Tasks with subtasks can't repeat."
+      : freq.value ? "Repeating tasks can't have subtasks or be moved to another list."
+      : "";
+    limits.hidden = !limits.textContent;
   };
+  endKind.addEventListener("change", () => {
+    if (endKind.value === "on" && !endDate.value) endDate.value = addDays(due.value || isoDay(), 30);
+    syncRepeat();
+  });
   freq.addEventListener("change", () => { syncRepeat(); if (freq.value && !due.value) due.value = state.calDay || isoDay(); });
 
   // reminders: set of "o:<minutes>" or "c:<YYYY-MM-DDTHH:MM>"
@@ -58,12 +84,14 @@ export function openTask(id) {
   // subtasks
   const subsDiv = h("div", {});
   const newSub = h("input", { placeholder: "Add a subtask", class: "grow" });
+  const addSubBtn = h("button", { type: "button", onclick: () => addSub() }, "Add");
   const drawSubs = () => {
     const subs = state.tasks.filter(s => s.parent_id === t.id).sort((a, b) => a.position - b.position || a.id - b.id);
     subsDiv.replaceChildren(...subs.map(s => h("div", { class: "check-row sub-edit" + (s.done_at ? " done" : "") },
       h("button", { type: "button", class: "check", onclick: async () => { await actions.toggle(s); drawSubs(); } }, s.done_at ? "✓" : ""),
       h("span", { class: "grow title", onclick: () => { close(); openTask(s.id); } }, s.title),
       h("button", { type: "button", class: "x", title: "Delete subtask", onclick: async () => { await actions.remove(s); drawSubs(); } }, "×"))));
+    syncRepeat();
   };
   const addSub = async () => {
     const v = newSub.value.trim();
@@ -83,8 +111,10 @@ export function openTask(id) {
     set("due", due.value || null);
     set("due_time", due.value && time.value ? time.value : null);
     if (!isSub) set("list_id", Number(list.value));
+    const ends = endKind.value === "on" && endDate.value ? { on: endDate.value }
+      : endKind.value === "after" ? { count: Math.max(1, Math.floor(Number(endCount.value)) || 1) } : null;
     set("repeat", freq.value && due.value
-      ? { freq: freq.value, interval: Math.max(1, Number(interval.value) || 1), ...(freq.value === "weekly" && weekDays.size && { days: [...weekDays].sort() }) }
+      ? { freq: freq.value, interval: Math.max(1, Number(interval.value) || 1), ...(freq.value === "weekly" && weekDays.size && { days: [...weekDays].sort() }), ...(ends && { end: ends }) }
       : null);
     return p;
   };
@@ -121,11 +151,13 @@ export function openTask(id) {
           quickDate("Today", isoDay()), quickDate("Tomorrow", addDays(isoDay(), 1)), quickDate("Next week", addDays(isoDay(), 7)),
           h("button", { type: "button", class: "link", onclick: () => { due.value = ""; time.value = ""; freq.value = ""; syncRepeat(); drawReminders(); syncQuick(); } }, "Clear date"))),
       !isSub && h("div", { class: "block" },
-        h("label", {}, "Repeat", freq), repeatDetail, dayBtns),
+        h("label", {}, "Repeat", freq), repeatDetail, dayBtns, endRow, limits,
+        t.repeat && h("p", { class: "hint" }, "Changing the date moves only this one. Changing the repeat settings restarts the series from this date."),
+        t.repeat && h("div", { class: "row" }, h("button", { type: "button", class: "danger", onclick: () => { close(); actions.saveTask(t.id, { repeat: null }, null); } }, "Stop repeating"))),
       !isSub && h("label", {}, "List", list),
       !isSub && h("details", { class: "block", open: picked.size > 0 }, h("summary", {}, "🔔 Reminders"), remDiv),
       !isSub && h("div", { class: "block" }, h("div", { class: "block-title" }, "Subtasks"), subsDiv,
-        h("div", { class: "row" }, newSub, h("button", { type: "button", onclick: addSub }, "Add"))),
+        h("div", { class: "row" }, newSub, addSubBtn)),
       t.done_at && h("p", { class: "hint" }, "Completed " + new Date(t.done_at).toLocaleString()),
       h("div", { class: "row actions" },
         h("button", { value: "delete", formnovalidate: true, class: "danger" }, "Delete"),
@@ -141,6 +173,6 @@ export function openTask(id) {
     return body;
   });
   syncRepeat(); drawReminders(); drawSubs();
-  due.addEventListener("change", () => { drawReminders(); syncQuick(); });
+  due.addEventListener("change", () => { drawReminders(); syncQuick(); syncRepeat(); });
   syncQuick();
 }

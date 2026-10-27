@@ -36,7 +36,9 @@ export const agoLabel = iso => {
 export function repeatLabel(r) {
   if (!r) return "";
   const unit = { daily: "day", weekly: "week", monthly: "month", yearly: "year" }[r.freq];
-  const base = r.interval > 1 ? `Every ${r.interval} ${unit}s` : `Every ${unit}`;
-  if (r.freq === "weekly" && r.days?.length) return `${base} on ${r.days.map(d => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d]).join(", ")}`;
-  return base;
+  let label = r.interval > 1 ? `Every ${r.interval} ${unit}s` : `Every ${unit}`;
+  if (r.freq === "weekly" && r.days?.length) label += ` on ${r.days.map(d => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d]).join(", ")}`;
+  if (r.end?.on) label += `, until ${shortDate(r.end.on)}`;
+  if (r.end?.count != null) label += r.end.count > 1 ? `, ${r.end.count} left` : ", last one";
+  return label;
 }

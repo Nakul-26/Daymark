@@ -144,5 +144,9 @@ document.addEventListener("visibilitychange", async () => {
   } catch { /* ignore */ }
 });
 
+navigator.serviceWorker?.addEventListener("message", e => {
+  if (e.data?.type === "tasks-changed") loadAll().then(render).catch(() => {});
+});
+
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("/sw.js").catch(() => {});
 boot().then(() => { lastSeen = Math.max(0, ...state.notifications.map(n => n.id)); });
