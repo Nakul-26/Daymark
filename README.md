@@ -20,10 +20,9 @@ Needs Node 22.13+ (built-in `node:sqlite`).
 Quick-add examples: `Call mom tomorrow 5pm !`, `Submit report friday`.
 
 ## Deploy (home server)
-`.env` containing `PASSWORD=...` (and `COOKIE_SECURE=true` behind HTTPS), then `docker compose up -d --build`.
-Add a hostname to the existing Cloudflare Tunnel pointing at `http://127.0.0.1:8080` (keep the existing routes and catch-all rule).
+Set `PASSWORD` (and optionally `COOKIE_SECURE`, `TZ_DEFAULT`; see `.env.example`). On Dokploy: create a Compose service from this repo, set those in the Environment tab, add a domain for service `daymark` port `3000`, enable Auto Deploy. On the home server with a Cloudflare Tunnel: `docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d --build`, then point the tunnel at `http://127.0.0.1:8080`.
 Push notifications and install-to-phone need HTTPS, so use the tunnel hostname. On iPhone, install to the Home Screen first.
-**Backups:** `data/backups/` gets a daily copy (14 kept). Restore = stop the app, replace `data/daymark.sqlite` with a backup. Copy the folder off the server too.
+**Backups:** `backups/` in the data volume (`data/backups/` when run locally) gets a daily copy (14 kept). Restore = stop the app, replace `daymark.sqlite` in the `daymark-data` volume with a backup. Copy the folder off the server too.
 
 ## Where to change things
 | I want to...                          | Edit |

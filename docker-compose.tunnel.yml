@@ -1,0 +1,7 @@
+# Cloudflare-tunnel setup on the home server (not used by Dokploy):
+#   docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d --build
+# Then point the tunnel at http://127.0.0.1:8080
+services:
+  daymark:
+    ports:
+      - "127.0.0.1:8080:3000"
