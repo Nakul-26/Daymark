@@ -73,7 +73,7 @@ export function renderTasks(route) {
       return h("details", { class: "group", open: !pref.get(key, true), ontoggle: e => pref.set(key, !e.target.open) },
         h("summary", {}, `${title} (${g.tasks.length})`), ul);
     }
-    return h("section", { class: "group" }, title ? h("h3", {}, title) : null, ul);
+    return h("section", { class: "group" }, title ? h("h3", { class: g.title === "Overdue" ? "late" : "" }, title) : null, ul);
   });
 
   const myday = view.id === "myday" && !q;

@@ -16,7 +16,7 @@ export function taskRow(entry, ctx = {}) {
   const list = ctx.showList && state.lists.find(l => l.id === t.list_id);
 
   const chips = [
-    t.due && h("span", { class: "chip" + (!done && t.due < today ? " late" : "") }, "📅 " + dueLabel(t.due, t.due_time)),
+    t.due && h("span", { class: "chip" + (!done && t.due < today ? " late" : "") }, dueLabel(t.due, t.due_time)),
     t.repeat && h("span", { class: "chip", title: repeatLabel(t.repeat) }, "↻ " + repeatLabel(t.repeat)),
     hasReminder && h("span", { class: "chip", title: "Has reminders" }, "🔔"),
     subs.length > 0 && h("span", { class: "chip" }, `☑ ${doneSubs}/${subs.length}`),
