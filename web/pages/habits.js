@@ -119,7 +119,7 @@ export function openHabit(hb) {
 export function renderHabits() {
   const list = activeHabits(), archived = state.habits.filter(x => x.archived_at);
   return h("div", {},
-    h("header", {}, h("h2", {}, "Habits & goals"), h("button", { class: "primary", onclick: () => openHabit() }, "+ New habit")),
+    h("header", {}, h("button", { class: "burger", "aria-label": "Menu", onclick: () => { state.menu = !state.menu; render(); } }, "☰"), h("h2", { class: "grow" }, "Habits & goals"), h("button", { class: "primary", onclick: () => openHabit() }, "+ New habit")),
     list.length
       ? h("ul", { class: "habits" }, list.map(hb => habitRow(hb, { strip: true })))
       : h("p", { class: "empty" }, "No habits yet. Keep it to 3–5 that matter, e.g. Exercise, Meditation, DSA (measured in hours, goal 14 per week)."),
