@@ -1,7 +1,7 @@
 // App shell: login, sidebar, routing (#/route), keyboard shortcuts, polling. Pages live in pages/.
 // To add a page: write pages/foo.js exporting a render function, add it to PAGES and (optionally) SIDEBAR_PAGES.
 import { api } from "./api.js";
-import { state, setRenderer, render, loadAll } from "./state.js";
+import { state, setRenderer, render, loadAll, leavePage } from "./state.js";
 import { refreshNotifications } from "./actions.js";
 import { actions } from "./actions.js";
 import { h, toast, isTyping, undoLast } from "./ui.js";
@@ -10,12 +10,12 @@ import { VIEWS } from "./views.js";
 import { isoDay } from "./time.js";
 import { renderTasks, allViews } from "./pages/tasks.js";
 import { renderInbox, openCapture } from "./pages/inbox.js";
-import { renderHabits } from "./pages/habits.js";
+import { renderHabits, renderHabitPage, forgetHabitPage } from "./pages/habits.js";
 import { renderCalendar } from "./pages/calendar.js";
 import { renderProgress } from "./pages/progress.js";
 import { renderNotifications, unreadCount } from "./pages/notifications.js";
 import { renderSettings } from "./pages/settings.js";
-import { openTask } from "./taskdialog.js";
+import { renderTaskPage, forgetTaskPage } from "./taskdialog.js";
 
 const root = document.getElementById("app");
 
@@ -55,12 +55,12 @@ document.addEventListener("daymark:logout", async () => {
 });
 
 // ---------- routing ----------
+const DETAIL = /^(task|habit)\/\d+$/;
 function onHash() {
   const raw = location.hash.replace(/^#\/?/, "") || localStorage.getItem("dm:last") || "myday";
-  const task = raw.match(/^task\/(\d+)$/);
-  if (task) { location.replace("#/myday"); setTimeout(() => openTask(Number(task[1])), 0); return; }
-  state.route = raw; state.menu = false;
-  try { localStorage.setItem("dm:last", raw); } catch { /* ignore */ }
+  state.route = raw; state.menu = false; state.navs++;
+  forgetTaskPage(); forgetHabitPage();
+  if (!DETAIL.test(raw)) try { localStorage.setItem("dm:last", raw); } catch { /* ignore */ }
   draw();
   document.getElementById("main")?.scrollTo(0, 0);
 }
@@ -89,7 +89,9 @@ function draw() {
     h("div", { class: "sep" }, "More"),
     SIDEBAR_PAGES.map(p => navButton({ id: p.id, label: p.label, icon: p.icon, count: p.badge?.() })));
 
-  const page = PAGES[state.route] ? PAGES[state.route]() : renderTasks(state.route);
+  const detail = state.route.match(/^(task|habit)\/(\d+)$/);
+  const page = detail ? (detail[1] === "task" ? renderTaskPage : renderHabitPage)(Number(detail[2]))
+    : PAGES[state.route] ? PAGES[state.route]() : renderTasks(state.route);
   const keep = document.activeElement?.id;
   const keepRow = document.activeElement?.matches?.("li.task") ? document.activeElement.dataset.id : null;
   const scroll = document.getElementById("main")?.scrollTop ?? 0;
@@ -111,6 +113,8 @@ document.addEventListener("keydown", e => {
   const mod = e.ctrlKey || e.metaKey;
   if (mod && e.key === "/") { e.preventDefault(); showShortcuts(); return; }
   if (mod && !e.shiftKey && e.key.toLowerCase() === "z" && !isTyping(e.target) && !document.querySelector("dialog[open]")) { if (undoLast()) e.preventDefault(); return; }
+  if (DETAIL.test(state.route) && !isTyping(e.target) && e.key === "Escape") { leavePage(); return; }
+  if (DETAIL.test(state.route) && !mod) return; // no list shortcuts on a detail page
   if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target) || document.querySelector("dialog[open]")) {
     if (e.key === "Escape" && e.target.id === "search-input") { state.query = ""; render(); }
     return;

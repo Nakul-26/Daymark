@@ -9,6 +9,7 @@ export const state = {
   query: "",               // search text
   filter: { starred: false, listId: null }, // My Day filters
   calMonth: null, calDay: null,
+  navs: 0,                 // how many routes were shown this session (to know if "back" stays in the app)
 };
 
 // Small per-device preferences (sort order of a list, collapsed sections...). Never required for correctness.
@@ -26,4 +27,9 @@ export async function loadAll() {
     api.tasks(), api.lists(), api.reminders(), api.captures(), api.habits(), api.notifications(), api.settings(),
   ]);
   Object.assign(state, { tasks, lists, reminders, captures, habits: habits.habits, habitLogs: habits.logs, notifications, settings });
+}
+
+// Leave a task/habit page: step back in history if we came from inside the app, else go to My Day.
+export function leavePage() {
+  if (state.navs > 1) history.back(); else location.replace("#/myday");
 }

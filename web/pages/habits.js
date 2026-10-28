@@ -1,11 +1,11 @@
 // Habits & goals page, plus habitRow() which My Day reuses for today's habits.
 import { h, modal, num, confirmBox } from "../ui.js";
-import { state, render } from "../state.js";
+import { state, render, leavePage } from "../state.js";
 import { actions } from "../actions.js";
 import { isoDay, addDays, mondayOf, DOW, shortDate } from "../time.js";
 import { makeTotals, scheduled, dayDone, weekProgress, streak, history } from "../habitstats.js";
 
-const expanded = new Set();
+export const openHabitPage = id => { location.hash = "#/habit/" + id; };
 const unitText = h_ => (h_.kind === "amount" ? h_.unit || "" : "");
 
 export const activeHabits = () => state.habits.filter(x => !x.archived_at);
@@ -18,7 +18,7 @@ function progressBar(p, unit) {
 }
 
 // day = the day being tracked (today in My Day)
-export function habitRow(hb, { day = isoDay(), strip = false } = {}) {
+export function habitRow(hb, { day = isoDay(), strip = false, page = false } = {}) {
   const totals = makeTotals(state.habitLogs);
   const today = isoDay();
   const total = totals(hb.id, day);
@@ -40,13 +40,13 @@ export function habitRow(hb, { day = isoDay(), strip = false } = {}) {
     h("div", { class: "main" },
       hb.kind === "check" ? control : h("span", { class: "check" + (done ? " on" : ""), "aria-hidden": "true" }, done ? "✓" : ""),
       h("div", { class: "body" },
-        h("div", { class: "title", onclick: () => { expanded.has(hb.id) ? expanded.delete(hb.id) : expanded.add(hb.id); render(); } }, hb.name,
+        h("div", { class: "title", onclick: page ? null : () => openHabitPage(hb.id) }, hb.name,
           hb.kind === "amount" && total ? h("span", { class: "chip" }, `${num(total)} ${unitText(hb)} ${day === today ? "today" : ""}`) : null,
           s.n > 0 ? h("span", { class: "chip", title: "Current streak" }, `🔥 ${s.n} ${s.unit}${s.n > 1 ? "s" : ""}`) : null),
         progressBar(p, unitText(hb)),
         strip && weekStrip(hb, totals, today)),
       hb.kind === "amount" ? control : null),
-    expanded.has(hb.id) && details(hb, totals, today));
+    page && details(hb, totals, today));
   return li;
 }
 
@@ -71,12 +71,11 @@ function details(hb, totals, today) {
     logs.length > 0 && h("ul", { class: "logs" }, logs.map(l => h("li", {}, `${shortDate(l.day)} · ${num(l.amount)} ${unitText(hb)}`,
       h("button", { class: "x", title: "Delete this entry", onclick: () => actions.deleteLog(l) }, "×")))),
     h("div", { class: "row" },
-      h("button", { onclick: () => openHabit(hb) }, "Edit"),
       h("button", { onclick: () => actions.saveHabit(hb.id, { archived: !hb.archived_at }) }, hb.archived_at ? "Restore" : "Archive"),
-      h("button", { class: "danger", onclick: () => confirmBox(`Delete "${hb.name}" and its history?`) && actions.deleteHabit(hb) }, "Delete")));
+      h("button", { class: "danger", onclick: () => { if (confirmBox(`Delete "${hb.name}" and its history?`)) { actions.deleteHabit(hb); leavePage(); } } }, "Delete")));
 }
 
-export function openHabit(hb) {
+function habitForm(hb, close) {
   const isNew = !hb;
   const name = h("input", { value: hb?.name || "", maxlength: 80, placeholder: "e.g. Exercise, DSA practice", required: true });
   let kind = hb?.kind || "check";
@@ -97,24 +96,40 @@ export function openHabit(hb) {
     type: "button", class: days.has(i) ? "on" : "", onclick: e => { days.has(i) ? days.delete(i) : days.add(i); e.currentTarget.classList.toggle("on"); },
   }, DOW[i])));
 
-  modal(close => {
-    const f = h("form", {
-      method: "dialog", class: "task-form",
-      onsubmit: e => {
-        if (e.submitter?.value !== "save") return;
-        const data = { name: name.value.trim(), kind, days: [...days], weekly_target: weekly.value || null, daily_target: kind === "amount" ? daily.value || null : null, unit: kind === "amount" ? unit.value : "" };
-        isNew ? actions.addHabit(data) : actions.saveHabit(hb.id, data);
-      },
+  const f = h("form", {
+    class: "task-form" + (isNew ? "" : " page"),
+    onsubmit: e => {
+      e.preventDefault();
+      const data = { name: name.value.trim(), kind, days: [...days], weekly_target: weekly.value || null, daily_target: kind === "amount" ? daily.value || null : null, unit: kind === "amount" ? unit.value : "" };
+      isNew ? actions.addHabit(data) : actions.saveHabit(hb.id, data);
+      close();
     },
-      h("h3", {}, isNew ? "New habit" : "Edit habit"),
-      h("label", {}, "Name", name), h("label", {}, "Type", kindSel),
-      h("div", {}, "Scheduled days", dayBtns), amountOnly,
-      h("label", {}, weeklyLabel, weekly),
-      h("div", { class: "row actions" }, h("span", { class: "grow" }), h("button", { value: "cancel", formnovalidate: true }, "Cancel"), h("button", { value: "save", class: "primary" }, "Save")));
-    sync();
-    return f;
-  });
+  },
+    isNew && h("h3", {}, "New habit"),
+    h("label", {}, "Name", name), h("label", {}, "Type", kindSel),
+    h("div", {}, "Scheduled days", dayBtns), amountOnly,
+    h("label", {}, weeklyLabel, weekly),
+    h("div", { class: "row actions" }, h("span", { class: "grow" }), h("button", { type: "button", onclick: () => close() }, "Cancel"), h("button", { value: "save", class: "primary" }, "Save")));
+  sync();
+  return f;
 }
+
+export const openHabit = () => modal(close => habitForm(null, close));
+
+// The habit page (#/habit/<id>): stats and history on top, the edit form below (kept between re-renders).
+let hpage = null;
+export const forgetHabitPage = () => { hpage = null; };
+const backButton = () => h("button", { class: "burger-back x back", "aria-label": "Back", title: "Back", onclick: leavePage }, "←");
+export function renderHabitPage(id) {
+  const hb = state.habits.find(x => x.id === id);
+  if (!hb) return h("div", {}, h("header", {}, backButton(), h("h2", { class: "grow" }, "Habit not found")));
+  if (hpage?.id !== id) hpage = { id, form: habitForm(hb, leavePage) };
+  return h("div", {},
+    h("header", {}, backButton(), h("h2", { class: "grow" }, hb.name)),
+    h("ul", { class: "habits" }, habitRow(hb, { strip: true, page: true })),
+    h("h3", {}, "Edit"), hpage.form);
+}
+
 
 export function renderHabits() {
   const list = activeHabits(), archived = state.habits.filter(x => x.archived_at);
