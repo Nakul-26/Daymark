@@ -248,3 +248,11 @@ h3.late { color: var(--danger); }
 .task-form label.check-row { flex-direction: row; align-items: center; gap: 8px; font-size: 14px; color: var(--text); }
 .checks { display: flex; flex-wrap: wrap; gap: 4px 18px; }
 .check-row input[type=checkbox] { width: 16px; height: 16px; margin: 0; padding: 0; accent-color: var(--accent); flex-shrink: 0; }
+
+/* easier tapping: bigger circle and star, with an invisible hit area around them */
+.check { position: relative; width: 26px; height: 26px; font-size: 15px; }
+.check::after, .star::after { content: ""; position: absolute; inset: -10px; }
+.task .star { position: relative; font-size: 22px; padding: 0 6px; }
+.subs .check { width: 22px; height: 22px; font-size: 12px; }
+.subs .check::after { inset: -8px; }
+@media (pointer: coarse) { .task .main { padding: 12px 8px; gap: 14px; } .star { opacity: 1; } }

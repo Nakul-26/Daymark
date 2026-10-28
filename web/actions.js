@@ -45,6 +45,8 @@ export const actions = {
 
   toggle: t => act(async () => {
     if (t.done_at) {
+      put(state.tasks, { ...t, done_at: null }); // optimistic
+      render();
       put(state.tasks, await api.reopenTask(t.id));
       return;
     }
