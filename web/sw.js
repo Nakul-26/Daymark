@@ -1,5 +1,5 @@
 // Service worker: makes the app installable, keeps it usable offline (last-seen data), and shows push notifications.
-const CACHE = "daymark-v1";
+const CACHE = "daymark-v2";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", e => e.waitUntil(
@@ -11,7 +11,8 @@ self.addEventListener("fetch", e => {
   if (req.method !== "GET" || new URL(req.url).origin !== location.origin) return;
   const url = new URL(req.url);
   if (/^\/api\/(session|push|export|backups)/.test(url.pathname)) return;
-  e.respondWith(fetch(req).then(res => {
+  // cache: "reload" skips the browser HTTP cache (Cloudflare can force max-age on static files)
+  e.respondWith(fetch(req, { cache: "reload" }).then(res => {
     if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
     return res;
   }).catch(async () => (await caches.match(req)) || (req.mode === "navigate" ? caches.match("/") : Response.error())));
