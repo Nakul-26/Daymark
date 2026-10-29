@@ -117,8 +117,6 @@ test("notification opens the task page, which scrolls and goes back", async () =
   await page.goto(BASE + "/#/notifications");
   await page.waitForSelector(".notif");
   await tap(page.locator(".notif").first());
-  await page.waitForSelector("dialog .alarm");
-  await tap(page.locator("dialog .alarm button", { hasText: "Open task" }));
   assert.match(await hash(), /^#\/task\/\d+$/);
   await page.waitForSelector("form.task-form.page");
   assert.deepEqual(await strayTapAreas(), []);

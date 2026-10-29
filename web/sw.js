@@ -24,13 +24,14 @@ self.addEventListener("push", e => {
   e.waitUntil(self.registration.showNotification(data.title || "Daymark", {
     body: data.body || "", tag: data.tag, icon: "/icon-192.png", badge: "/badge-96.png", timestamp: Date.now(),
     data: { url: data.url || "/", taskId: data.task_id || null },
-    ...(data.task_id && { actions: [{ action: "done", title: "Mark done" }] }),
+    ...(data.task_id && { actions: [{ action: "done", title: "Mark done" }, { action: "reschedule", title: "Reschedule" }] }),
   }));
 });
 
 self.addEventListener("notificationclick", e => {
   e.notification.close();
-  const { url = "/", taskId } = e.notification.data || {};
+  let { url = "/", taskId } = e.notification.data || {};
+  if (e.action === "reschedule" && taskId) url = `/#/alarm/${taskId}`; // opens the "remind me again" popup
   e.waitUntil((async () => {
     const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     if (e.action === "done" && taskId) { // finish the task without opening the app

@@ -89,7 +89,7 @@ export async function tick() {
         nid = createNotification({ type: "reminder", title: task.title, body, task_id: task.id });
         db.prepare("UPDATE reminders SET notification_id=? WHERE id=?").run(nid, r.id);
       }
-      const res = await pushToAll({ title: task.title, body, url: `/#/alarm/${task.id}`, tag: `reminder-${r.id}`, task_id: task.id });
+      const res = await pushToAll({ title: task.title, body, url: `/#/task/${task.id}`, tag: `reminder-${r.id}`, task_id: task.id });
       if (!res.transient) { finish("sent", `, sent_at='${nowIso}'`); continue; }
       const attempts = r.attempts + 1;
       if (attempts >= 5) { finish("failed", ", last_error='push failed 5 times'"); continue; }
