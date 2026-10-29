@@ -363,3 +363,8 @@ li.habit { padding-top: 10px; padding-bottom: 12px; }
 .snooze-opts button { display: flex; justify-content: space-between; align-items: center; text-align: left; gap: 12px; padding: 10px 14px; }
 .snooze-opts small { color: var(--muted); }
 .alarm .actions button { white-space: nowrap; }
+
+/* overdue tasks stand out: red border, light red tint, red check circle */
+li.task.overdue { border: 1px solid color-mix(in srgb, var(--danger) 60%, transparent); background: color-mix(in srgb, var(--danger) 7%, transparent); border-radius: 12px; margin: 6px 0; }
+li.task.overdue > .main .check { border-color: var(--danger); }
+li.task.overdue > .main .title { font-weight: 600; }

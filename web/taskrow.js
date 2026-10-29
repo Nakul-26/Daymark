@@ -25,7 +25,7 @@ export function taskRow(entry, ctx = {}) {
   ].filter(Boolean);
 
   const li = h("li", {
-    class: "task" + (done ? " done" : "") + (t.parent_id && !parent ? " sub" : ""),
+    class: "task" + (done ? " done" : "") + (!done && t.due && t.due < today ? " overdue" : "") + (t.parent_id && !parent ? " sub" : ""),
     tabindex: 0, "data-id": t.id,
     onkeydown: e => {
       if (e.target === li && rowKey(e, t, li)) e.preventDefault();

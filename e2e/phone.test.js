@@ -385,3 +385,15 @@ test("reminder popup: custom time and mark done", async () => {
   await page.waitForSelector(".toast:has-text('completed')");
   assert.ok((await api("GET", "/api/tasks")).find(x => x.id === t.id).done_at, "task is done");
 });
+
+test("overdue tasks have a red border", async () => {
+  const yesterday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
+  await api("POST", "/api/tasks", { title: "Late one", due: yesterday });
+  await page.goto(BASE + "/#/myday");
+  await page.reload();
+  const row = page.locator("li.task.overdue", { hasText: "Late one" });
+  await row.waitFor();
+  assert.notEqual(await row.evaluate(el => getComputedStyle(el).borderTopColor), "rgba(0, 0, 0, 0)");
+  assert.equal(await page.locator("li.task.overdue", { hasText: "Buy oat milk" }).count(), 0, "today's tasks are not overdue");
+  await shot("overdue");
+});
