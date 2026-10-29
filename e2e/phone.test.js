@@ -21,7 +21,7 @@ const settle = ms => page.waitForTimeout(ms ?? 250);
 
 // tap where a finger would: at the element's centre, and fail if something else is on top there
 async function tap(locator) {
-  await locator.scrollIntoViewIfNeeded();
+  await locator.evaluate(el => el.scrollIntoView({ block: "center" }));
   const b = await locator.boundingBox();
   const x = b.x + b.width / 2, y = b.y + b.height / 2;
   const ok = await locator.evaluate((el, [x, y]) => { const top = document.elementFromPoint(x, y); return el === top || el.contains(top); }, [x, y]);
@@ -298,4 +298,32 @@ test("repeating task: completing makes the next one", async () => {
   await page.goto(BASE + "/#/upcoming");
   assert.ok(await page.locator(".task", { hasText: "Water plants" }).count(), "next occurrence is upcoming");
   assert.ok(t.id);
+});
+
+// ---------- ease of use ----------
+// Finger targets: every tappable thing should be at least 40px tall/wide, counting the invisible tap area around it.
+const small = () => page.evaluate(() => {
+  const out = [];
+  const els = [...document.querySelectorAll("button, a[href], input, select, textarea, summary, .check, .star, .dot")].filter(e => e.offsetParent && !e.closest(".side:not(.open)"));
+  for (const e of els) {
+    const r = e.getBoundingClientRect();
+    if (!r.width || r.bottom < 0 || r.top > innerHeight) continue;
+    // grow by the ::after tap area if the element declares one
+    const a = getComputedStyle(e, "::after"), grow = a.content !== "none" && a.position === "absolute" ? Math.abs(parseFloat(a.top)) || 0 : 0;
+    const w = r.width + grow * 2, hh = r.height + grow * 2;
+    const type = e.type === "checkbox" || e.type === "radio";
+    if ((hh < 40 || w < 40) && !(type && e.closest("label"))) out.push(`${e.tagName.toLowerCase()}.${e.className || ""} "${(e.textContent || e.placeholder || e.getAttribute("aria-label") || "").trim().slice(0, 20)}" ${Math.round(w)}x${Math.round(hh)}`);
+  }
+  return out;
+});
+test("ease of use: every tap target is at least 40px", async () => {
+  const report = {};
+  for (const r of ["myday", "upcoming", "inbox", "habits", "calendar", "progress", "notifications", "settings"]) {
+    await page.goto(BASE + "/#/" + r); await page.waitForSelector("main header"); await settle(300);
+    report[r] = await small();
+  }
+  const t = (await api("GET", "/api/tasks"))[0];
+  await page.goto(BASE + "/#/task/" + t.id); await page.waitForSelector("form.task-form.page"); await settle(300);
+  report.taskpage = await small();
+  assert.deepEqual(Object.fromEntries(Object.entries(report).filter(([, v]) => v.length)), {}, "tap targets under 40px");
 });
