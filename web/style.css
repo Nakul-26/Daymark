@@ -172,11 +172,14 @@ dialog::backdrop { background: #0006; }
 .login input { padding: 10px; }
 
 @media (max-width: 720px) {
-  .side { position: fixed; top: 0; bottom: 0; left: 0; width: 78%; max-width: 300px; z-index: 5; transform: translateX(-100%); transition: transform .15s; box-shadow: 2px 0 12px #0004; }
-  .side.open { transform: none; }
+  .side { position: fixed; top: 0; bottom: 0; left: 0; width: 78%; max-width: 300px; z-index: 5; transform: translateX(-100%); transition: transform .15s; }
+  .side.open { transform: none; box-shadow: 2px 0 12px #0004; }
   .burger { display: inline-block; }
   main { padding: 12px 12px 80px; }
   .tiles { grid-template-columns: repeat(2, 1fr); }
+  header .grow { min-width: 0; }
+  header:has(.sort) h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  header .sort { max-width: 100px; flex-shrink: 0; font-size: 13px; padding-left: 8px; padding-right: 4px; }
   .cal-cell { min-height: 56px; }
   .ev { display: none; }
   .cal-cell:has(.ev)::after { content: "•"; color: var(--accent); text-align: center; }

@@ -13,6 +13,7 @@ const PORT = 3100 + Math.floor(Math.random() * 500), BASE = `http://127.0.0.1:${
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "daymark-e2e-"));
 const today = new Date().toISOString().slice(0, 10);
 let server, browser, ctx, page, cdp;
+const errors = [];
 
 const api = (method, url, body) => fetch(BASE + url, { method, headers: { "X-Requested-With": "daymark", "Content-Type": "application/json" }, body: body && JSON.stringify(body) }).then(r => r.json());
 const hash = () => page.evaluate(() => location.hash);
@@ -69,6 +70,7 @@ before(async () => {
   page = await ctx.newPage();
   cdp = await ctx.newCDPSession(page);
   page.on("pageerror", e => { throw e; });
+  page.on("console", m => { if (m.type() === "error") errors.push(m.text()); });
   await page.goto(BASE + "/#/myday");
   await page.waitForSelector(".task");
 });
@@ -151,4 +153,149 @@ test("every page has a way to open the menu on a phone", async () => {
     assert.ok(await page.locator(".side.open").count(), r + " menu doesn't open");
     await page.locator(".scrim").tap({ position: { x: 340, y: 300 } });
   }
+});
+
+// ---------- wider sweep ----------
+
+test("every page: no sideways overflow, no stray tap areas, no console errors", async () => {
+  for (const r of ["myday", "upcoming", "starred", "all", "done", "inbox", "habits", "calendar", "progress", "notifications", "settings"]) {
+    await page.goto(BASE + "/#/" + r);
+    await page.waitForSelector("main header");
+    await settle(300);
+    const over = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth + (document.getElementById("main").scrollWidth - document.getElementById("main").clientWidth));
+    assert.ok(over <= 0, `${r}: content is ${over}px wider than the screen`);
+    assert.deepEqual(await strayTapAreas(), [], r);
+    await shot("page-" + r);
+  }
+  assert.deepEqual(errors, []);
+});
+
+test("add a task with the quick box, star it, delete it, undo", async () => {
+  await page.goto(BASE + "/#/myday");
+  await page.waitForSelector(".add");
+  await page.fill("#add-input", "Pay rent tomorrow 5pm !");
+  await tap(page.locator(".add-row button[type=submit]"));
+  await page.goto(BASE + "/#/upcoming");
+  const row = page.locator(".task", { hasText: "Pay rent" });
+  await row.waitFor();
+  assert.ok(/5:00|17:00/.test(await row.innerText()), "time parsed: " + (await row.innerText()));
+  await page.goto(BASE + "/#/starred");
+  assert.ok(await page.locator(".task", { hasText: "Pay rent" }).count(), "the ! in the text starred it");
+  await tap(page.locator(".task", { hasText: "Pay rent" }).locator(".star"));
+  assert.equal(await page.locator(".task", { hasText: "Pay rent" }).count(), 0, "unstarring removes it from Starred");
+  await page.goto(BASE + "/#/upcoming");
+  await tap(page.locator(".task .body", { hasText: "Pay rent" }));
+  await page.waitForSelector("form.task-form.page");
+  await tap(page.locator("button[value=delete], button.danger").first());
+  await page.waitForSelector(".toast");
+  assert.equal(await page.locator(".task", { hasText: "Pay rent" }).count(), 0, "deleted");
+  await tap(page.locator(".toast button", { hasText: "Undo" }));
+  await page.waitForSelector(".task:has-text('Pay rent')");
+});
+
+test("subtasks: add on the task page, tick one, open it", async () => {
+  await page.goto(BASE + "/#/myday");
+  await tap(page.locator(".task .body", { hasText: "Call mom" }));
+  await page.waitForSelector("form.task-form.page");
+  const sum = page.locator("summary", { hasText: "Subtasks" });
+  await sum.click();
+  const input = page.locator("details:has(> summary:text('Subtasks')) input[type=text], details:has(> summary:text('Subtasks')) input:not([type])").last();
+  await input.fill("Dial number");
+  await input.press("Enter");
+  await page.waitForSelector("text=Dial number");
+  await tap(page.locator(".x.back"));
+  assert.ok(await page.locator(".task", { hasText: "Dial number" }).count(), "subtask shows under parent");
+});
+
+test("lists: create, add a task, rename, delete", async () => {
+  await page.goto(BASE + "/#/myday");
+  page.once("dialog", d => d.accept("Groceries"));
+  await tap(page.locator(".burger"));
+  await tap(page.locator("button.nav", { hasText: "New list" }));
+  await page.waitForSelector("h2:text('Groceries')");
+  await page.fill("#add-input", "Eggs");
+  await page.press("#add-input", "Enter");
+  await page.waitForSelector(".task:has-text('Eggs')");
+  await page.selectOption("select.sort", "date");
+  const [title, sort] = await Promise.all([page.locator("header h2").boundingBox(), page.locator("select.sort").boundingBox()]);
+  assert.ok(title.x + title.width <= sort.x + 1, "list title is covered by the sort menu");
+  assert.ok(title.width > 60, "list title is squashed to " + Math.round(title.width) + "px");
+  page.once("dialog", d => d.accept("Shopping"));
+  await tap(page.locator("details.menu summary"));
+  await tap(page.locator(".menu-body button", { hasText: "Rename" }));
+  await page.waitForSelector("h2:text('Shopping')");
+  await shot("list-menu");
+  page.once("dialog", d => d.accept());
+  await tap(page.locator("details.menu summary"));
+  await tap(page.locator(".menu-body button", { hasText: "Delete list" }));
+  await page.waitForFunction(() => location.hash === "#/myday");
+});
+
+test("search finds tasks and clears", async () => {
+  await page.goto(BASE + "/#/myday");
+  await page.fill("#search-input", "milk");
+  await page.waitForSelector("h3:has-text('Search results')");
+  assert.ok(await page.locator(".task", { hasText: "milk" }).count());
+  await page.fill("#search-input", "");
+  await page.waitForFunction(() => !document.querySelector("h3")?.textContent.includes("Search"));
+});
+
+test("calendar: pick a day, add a task there, change month", async () => {
+  await page.goto(BASE + "/#/calendar");
+  await tap(page.locator(".cal-cell.today"));
+  await page.waitForSelector("section.group .add");
+  await page.fill("#add-input", "Dentist");
+  await page.press("#add-input", "Enter");
+  await page.waitForSelector(".cal-cell.today:has(.ev)");
+  const t = await page.locator("h2").first().innerText();
+  await tap(page.locator("header button", { hasText: "›" }));
+  assert.notEqual(await page.locator("h2").first().innerText(), t, "month changed");
+  await shot("calendar");
+});
+
+test("inbox: capture, turn into task, archive", async () => {
+  await page.goto(BASE + "/#/inbox");
+  await page.fill("#add-input", "Idea: read a book");
+  await page.press("#add-input", "Enter");
+  await page.waitForSelector(".capture:has-text('read a book')");
+  await tap(page.locator(".capture button", { hasText: "Archive" }));
+  await tap(page.locator(".pill", { hasText: "Archived" }));
+  assert.ok(await page.locator(".capture", { hasText: "read a book" }).count(), "archived");
+  await tap(page.locator(".capture button", { hasText: "Move to inbox" }));
+  await tap(page.locator(".pill", { hasText: "Inbox" }));
+  await tap(page.locator(".capture button", { hasText: "→ Task" }));
+  await page.waitForSelector("form.task-form.page");
+  assert.match(await hash(), /^#\/task\/\d+$/);
+});
+
+test("habits: create a new habit from the + button and see it on progress", async () => {
+  await page.goto(BASE + "/#/habits");
+  await page.waitForSelector("main header");
+  await tap(page.locator("main header button", { hasText: /New|\+/ }).first());
+  await page.waitForSelector("dialog[open] input, .modal input");
+  await shot("new-habit");
+  await page.locator("dialog[open] input, .modal input").first().fill("Read");
+  await tap(page.locator("dialog[open] button.primary, .modal button.primary").first());
+  await page.waitForSelector(".habit:has-text('Read')");
+  await page.goto(BASE + "/#/progress");
+  await page.waitForSelector(".habit-progress:has-text('Read')");
+});
+
+test("settings: change a toggle, back up now", async () => {
+  await page.goto(BASE + "/#/settings");
+  await page.waitForSelector(".settings");
+  await tap(page.locator("button", { hasText: "Back up now" }));
+  await page.waitForSelector("text=Latest backup");
+});
+
+test("repeating task: completing makes the next one", async () => {
+  const t = await api("POST", "/api/tasks", { title: "Water plants", due: today, repeat: { freq: "daily", interval: 1 } });
+  await page.goto(BASE + "/#/myday");
+  await page.reload();
+  const row = page.locator(".task", { hasText: "Water plants" });
+  await tap(row.locator(".check").first());
+  await page.waitForSelector(".toast:has-text('Next')");
+  await page.goto(BASE + "/#/upcoming");
+  assert.ok(await page.locator(".task", { hasText: "Water plants" }).count(), "next occurrence is upcoming");
+  assert.ok(t.id);
 });
