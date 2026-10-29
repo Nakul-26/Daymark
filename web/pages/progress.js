@@ -23,7 +23,7 @@ export function renderProgress() {
   const totals = makeTotals(state.habitLogs);
   const max = Math.max(1, ...days.map(d => doneByDay.get(d) || 0));
 
-  return h("div", {},
+  return h("div", { class: "progress-page" },
     h("header", {}, h("button", { class: "burger", onclick: () => { state.menu = !state.menu; render(); } }, "☰"), h("h2", { class: "grow" }, "Progress")),
     h("div", { class: "tiles" }, tile(doneWeek, "done this week"), tile(open.length, "open tasks"), tile(overdue, "overdue"), tile(state.captures.filter(c => c.status === "inbox").length, "in inbox")),
     h("section", { class: "group" }, h("h3", {}, "Tasks completed, last 14 days"),

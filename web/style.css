@@ -338,3 +338,16 @@ a.btn { color: inherit; }
 .settings .plain li { padding: 0; justify-content: space-between; }
 .settings .check-row { padding: 0; }
 .settings p, .settings .hint { margin: 0; line-height: 1.45; }
+
+/* sections as cards, so it is obvious what belongs together */
+.settings .group, .progress-page .group { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin: 0 0 16px; max-width: 560px; }
+.settings .group { gap: 14px; }
+.settings h3, .progress-page h3 { font-size: 12px; letter-spacing: .06em; color: var(--text); margin: 0 0 4px; padding: 0; }
+.settings .group input, .settings .group select { background: var(--bg); }
+.progress-page .group { max-width: none; }
+.habit-progress { padding: 12px 0; border-top: 1px solid var(--line); }
+.habit-progress:first-of-type { border-top: 0; padding-top: 0; }
+.notif { padding: 14px 8px; }
+.notif .title { margin-bottom: 2px; }
+li.habit { padding-top: 10px; padding-bottom: 12px; }
+.tiles { margin-bottom: 16px; }

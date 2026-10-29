@@ -327,3 +327,15 @@ test("ease of use: every tap target is at least 40px", async () => {
   report.taskpage = await small();
   assert.deepEqual(Object.fromEntries(Object.entries(report).filter(([, v]) => v.length)), {}, "tap targets under 40px");
 });
+
+test("desktop, dark mode: screenshots of every page", async () => {
+  const dctx = await browser.newContext({ viewport: { width: 1100, height: 760 }, colorScheme: "dark" });
+  const d = await dctx.newPage();
+  for (const r of ["myday", "habits", "calendar", "progress", "inbox", "notifications", "settings"]) {
+    await d.goto(BASE + "/#/" + r);
+    await d.waitForSelector("main header");
+    await d.waitForTimeout(300);
+    await d.screenshot({ path: path.join(process.env.SHOTS || os.tmpdir(), `daymark-desktop-${r}.png`) });
+  }
+  await dctx.close();
+});
