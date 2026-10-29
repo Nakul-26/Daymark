@@ -152,6 +152,11 @@ export const actions = {
     state.habitLogs = state.habitLogs.filter(l => l.habit_id !== h.id);
   }),
   toggleHabit: (h, day = isoDay()) => act(async () => {
+    // optimistic: flip the day on screen now, then take the server's answer
+    const had = state.habitLogs.some(l => l.habit_id === h.id && l.day === day);
+    state.habitLogs = had ? state.habitLogs.filter(l => !(l.habit_id === h.id && l.day === day))
+      : [...state.habitLogs, { id: -Date.now(), habit_id: h.id, day, amount: 1 }];
+    render();
     const logs = await api.toggleHabit(h.id, day);
     state.habitLogs = [...state.habitLogs.filter(l => !(l.habit_id === h.id && l.day === day)), ...logs];
   }),
