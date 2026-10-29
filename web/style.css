@@ -268,3 +268,7 @@ header .x.back { padding: 0 12px 0 0; }
 .habit .check { width: 30px; height: 30px; margin-top: 0; }
 .habit .check::after { inset: -8px; }
 .habit .title { cursor: pointer; }
+
+/* the invisible tap areas must stay anchored to their own button (the star in the task page header wasn't) */
+.star, .check, .dot { position: relative; }
+.dlg-head .star { position: relative; }
