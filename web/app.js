@@ -4,7 +4,7 @@ import { api } from "./api.js";
 import { state, setRenderer, render, loadAll, leavePage } from "./state.js";
 import { refreshNotifications } from "./actions.js";
 import { actions } from "./actions.js";
-import { h, toast, isTyping, undoLast } from "./ui.js";
+import { h, toast, isTyping, undoLast, dismissToast } from "./ui.js";
 import { showShortcuts } from "./shortcuts.js";
 import { VIEWS } from "./views.js";
 import { isoDay } from "./time.js";
@@ -60,6 +60,7 @@ function onHash() {
   const raw = location.hash.replace(/^#\/?/, "") || localStorage.getItem("dm:last") || "myday";
   state.route = raw; state.menu = false; state.navs++;
   forgetTaskPage(); forgetHabitPage();
+  if (DETAIL.test(raw)) dismissToast(); // a toast would sit on top of the page's Save bar
   if (!DETAIL.test(raw)) try { localStorage.setItem("dm:last", raw); } catch { /* ignore */ }
   draw();
   document.getElementById("main")?.scrollTo(0, 0);
@@ -95,7 +96,7 @@ function draw() {
   const keep = document.activeElement?.id;
   const keepRow = document.activeElement?.matches?.("li.task") ? document.activeElement.dataset.id : null;
   const scroll = document.getElementById("main")?.scrollTop ?? 0;
-  const main = h("main", { id: "main" }, page);
+  const main = h("main", { id: "main", class: DETAIL.test(state.route) ? "detail" : "" }, page);
   root.replaceChildren(side, main, state.menu ? h("div", { class: "scrim", onclick: () => { state.menu = false; draw(); } }) : "");
   main.scrollTop = scroll;
 

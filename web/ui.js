@@ -26,6 +26,8 @@ export function toast(message, { undo, error } = {}) {
   toastTimer = setTimeout(() => toastEl?.remove(), undo ? 8000 : 4000);
 }
 
+export const dismissToast = () => { toastEl?.remove(); lastUndo = null; };
+
 // Ctrl+Z: run the Undo of the toast that's showing, if any.
 export function undoLast() {
   if (!toastEl?.isConnected || !lastUndo) return false;

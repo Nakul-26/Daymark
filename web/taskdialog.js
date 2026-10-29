@@ -84,14 +84,14 @@ function buildTaskForm(id, close) {
   const custom = h("input", { type: "datetime-local" });
   const drawReminders = () => {
     const addCustom = () => { if (custom.value) { picked.add("c:" + custom.value.slice(0, 16)); custom.value = ""; drawReminders(); } };
-    remDiv.replaceChildren(
+    remDiv.replaceChildren(...[
       h("div", { class: "checks" },
         ...PRESETS.map(([m, label]) => h("label", { class: "check-row" },
           h("input", { type: "checkbox", checked: picked.has(`o:${m}`), onchange: e => (e.target.checked ? picked.add(`o:${m}`) : picked.delete(`o:${m}`)) }), label)),
         ...[...picked].filter(k => k.startsWith("c:")).map(k => h("span", { class: "check-row" }, "⏰ " + k.slice(2).replace("T", " "),
           h("button", { type: "button", class: "x", title: "Remove", onclick: () => { picked.delete(k); drawReminders(); } }, "×")))),
       h("div", { class: "row" }, custom, h("button", { type: "button", onclick: addCustom }, "Add custom")),
-      !due.value ? h("p", { class: "hint" }, "“Before” reminders need a date. A custom reminder works without one.") : null);
+      !due.value && h("p", { class: "hint" }, "“Before” reminders need a date. A custom reminder works without one.")].filter(Boolean));
   };
 
   // subtasks

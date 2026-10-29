@@ -260,6 +260,7 @@ h3.late { color: var(--danger); }
 /* task / habit pages */
 .task-form.page { max-width: 640px; }
 .task-form.page .actions { position: sticky; bottom: 0; margin: 8px 0 0; padding: 12px 0; border-radius: 0; z-index: 2; }
+main.detail { padding-bottom: 0; } /* so the sticky Save bar sits at the very bottom */
 .x.back { font-size: 26px; padding: 0 10px 0 0; color: var(--text); }
 header .x.back { padding: 0 12px 0 0; }
 .habits.page-row .habit, .habit { padding: 10px 4px; }

@@ -1,6 +1,8 @@
 # daymark
 
 Self-hosted tasks + habits + reminders app (Google-Tasks style). Node 22.13+ with built-in `node:sqlite`, vanilla JS frontend in `web/` (no build step), only dep is `web-push`. Tests: `npm test` (run on remote).
+Browser tests (phone-sized screen, real touches, throwaway DB): `npm run e2e` in `e2e/`, run on the remote only. One-time setup there: `npm i --no-save playwright@1.49.1 && npx playwright install chromium`. The remote lacks system libs/fonts and has no sudo, so the libs and DejaVu fonts were unpacked from apt `.deb`s into `~/work/pwlibs` (outside the synced project). Run with:
+`remote-run run e2e 'export LD_LIBRARY_PATH=$HOME/work/pwlibs/root/usr/lib/x86_64-linux-gnu PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true FONTCONFIG_FILE=$HOME/work/pwlibs/fonts.conf SHOTS=$PWD/outputs; mkdir -p outputs; npm run e2e'`, then `remote-run pull` to get screenshots from `outputs/` and look at them.
 
 ## Execution environment
 - Code lives and is edited on this machine (home server). Secrets (.env, API keys, git tokens) never leave it.

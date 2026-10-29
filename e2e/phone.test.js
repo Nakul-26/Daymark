@@ -1,0 +1,154 @@
+// Browser tests on a phone-sized screen: real touches against a real server with a throwaway database.
+// Needs Playwright (not a normal dependency): `npm i --no-save playwright && npx playwright install chromium`, then `npm run e2e`.
+import test, { before, after } from "node:test";
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { DatabaseSync } from "node:sqlite";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { chromium } from "playwright";
+
+const PORT = 3100 + Math.floor(Math.random() * 500), BASE = `http://127.0.0.1:${PORT}`;
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), "daymark-e2e-"));
+const today = new Date().toISOString().slice(0, 10);
+let server, browser, ctx, page, cdp;
+
+const api = (method, url, body) => fetch(BASE + url, { method, headers: { "X-Requested-With": "daymark", "Content-Type": "application/json" }, body: body && JSON.stringify(body) }).then(r => r.json());
+const hash = () => page.evaluate(() => location.hash);
+const settle = ms => page.waitForTimeout(ms ?? 250);
+
+// tap where a finger would: at the element's centre, and fail if something else is on top there
+async function tap(locator) {
+  await locator.scrollIntoViewIfNeeded();
+  const b = await locator.boundingBox();
+  const x = b.x + b.width / 2, y = b.y + b.height / 2;
+  const ok = await locator.evaluate((el, [x, y]) => { const top = document.elementFromPoint(x, y); return el === top || el.contains(top); }, [x, y]);
+  assert.ok(ok, "something covers the middle of " + (await locator.evaluate(el => el.outerHTML.slice(0, 80))));
+  await page.touchscreen.tap(x, y);
+  await settle();
+}
+
+// a finger swipe up (real touch events); returns how far <main> scrolled
+async function swipeUp(x = 180, y = 500) {
+  const before = await page.evaluate(() => document.getElementById("main").scrollTop);
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+  for (let i = 1; i <= 12; i++) { await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y: y - i * 20 }] }); await page.waitForTimeout(16); }
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await settle(600);
+  return (await page.evaluate(() => document.getElementById("main").scrollTop)) - before;
+}
+
+// every button's clickable area must stay close to the button itself (no stray full-screen tap areas)
+async function strayTapAreas() {
+  return page.evaluate(() => {
+    const bad = [];
+    for (let x = 4; x < innerWidth; x += 24) for (let y = 4; y < innerHeight; y += 24) {
+      const btn = document.elementFromPoint(x, y)?.closest("button, a");
+      if (!btn) continue;
+      const r = btn.getBoundingClientRect(), pad = 16;
+      if (x < r.left - pad || x > r.right + pad || y < r.top - pad || y > r.bottom + pad) bad.push(`${btn.className || btn.tagName} at ${x},${y}`);
+    }
+    return bad;
+  });
+}
+
+before(async () => {
+  server = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", "server.js"], { env: { ...process.env, PORT, DATA_DIR: dir, PASSWORD: "", TZ_DEFAULT: "Asia/Kolkata" }, stdio: "ignore" });
+  for (let i = 0; i < 50; i++) { try { if ((await fetch(BASE + "/api/health")).ok) break; } catch { /* starting */ } await new Promise(r => setTimeout(r, 100)); }
+  const t1 = await api("POST", "/api/tasks", { title: "Buy milk", due: today, notes: "from the shop" });
+  await api("POST", "/api/tasks", { title: "Call mom", due: today });
+  await api("POST", "/api/tasks", { title: "Sub one", parent_id: t1.id });
+  await api("POST", "/api/habits", { name: "Exercise", kind: "check", days: [0, 1, 2, 3, 4, 5, 6] });
+  const sq = new DatabaseSync(path.join(dir, "daymark.sqlite"));
+  sq.prepare("INSERT INTO notifications (type, title, body, task_id) VALUES ('reminder', 'Buy milk', 'Today', ?)").run(t1.id);
+  sq.close();
+
+  browser = await chromium.launch({ args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"] });
+  ctx = await browser.newContext({ viewport: { width: 360, height: 640 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
+  page = await ctx.newPage();
+  cdp = await ctx.newCDPSession(page);
+  page.on("pageerror", e => { throw e; });
+  await page.goto(BASE + "/#/myday");
+  await page.waitForSelector(".task");
+});
+after(async () => { await browser?.close(); server?.kill(); fs.rmSync(dir, { recursive: true, force: true }); });
+
+const shot = name => page.screenshot({ path: path.join(process.env.SHOTS || os.tmpdir(), `daymark-${name}.png`) });
+
+test("list: ticking and unticking a task by touch", async () => {
+  const row = page.locator(".task", { hasText: "Call mom" });
+  await tap(row.locator(".check").first());
+  await tap(page.locator("details.group summary", { hasText: "Completed" }));
+  const done = page.locator(".task.done", { hasText: "Call mom" });
+  assert.equal(await done.count(), 1, "task should be in Completed after ticking");
+  await tap(done.locator(".check").first());
+  assert.equal(await page.locator(".task:not(.done)", { hasText: "Call mom" }).count(), 1, "unticking brings it back");
+  await shot("list");
+});
+
+test("task page: opens, no stray tap areas, scrolls, back arrow works", async () => {
+  await tap(page.locator(".task .body", { hasText: "Buy milk" }));
+  assert.match(await hash(), /^#\/task\/\d+$/);
+  await page.waitForSelector("form.task-form.page");
+  await page.locator("summary", { hasText: "Subtasks" }).click(); // make the page long
+  await page.locator("summary", { hasText: "Reminders" }).evaluate(el => { el.parentElement.open = true; });
+  await shot("task-page");
+  assert.deepEqual(await strayTapAreas(), []);
+  const saveBottom = await page.locator("button[value=save]").evaluate(el => innerHeight - el.getBoundingClientRect().bottom);
+  assert.ok(saveBottom < 100 && saveBottom >= 0, `Save bar should sit at the bottom of the screen (${Math.round(saveBottom)}px above it)`);
+  const moved = await swipeUp();
+  assert.ok(moved > 50, `page should scroll with a finger swipe (moved ${moved}px)`);
+  await tap(page.locator(".x.back"));
+  assert.equal(await hash(), "#/myday", "back arrow returns to the list");
+});
+
+test("task page: edit and save", async () => {
+  await tap(page.locator(".task .body", { hasText: "Buy milk" }));
+  await page.fill(".task-title", "Buy oat milk");
+  await tap(page.locator("button[value=save]"));
+  await page.waitForSelector(".task .title:text('Buy oat milk')");
+  assert.equal(await hash(), "#/myday");
+});
+
+test("notification opens the task page, which scrolls and goes back", async () => {
+  await page.goto(BASE + "/#/notifications");
+  await page.waitForSelector(".notif");
+  await tap(page.locator(".notif").first());
+  assert.match(await hash(), /^#\/task\/\d+$/);
+  await page.waitForSelector("form.task-form.page");
+  assert.deepEqual(await strayTapAreas(), []);
+  await tap(page.locator(".x.back"));
+  assert.equal(await hash(), "#/notifications");
+});
+
+test("habit: check in and out, open the habit page, scroll, back", async () => {
+  await page.goto(BASE + "/#/habits");
+  await page.waitForSelector(".habit");
+  const check = page.locator(".habit .check").first();
+  await tap(check);
+  assert.ok((await check.getAttribute("class")).includes("on"), "ticked");
+  await tap(check);
+  assert.ok(!(await check.getAttribute("class")).includes("on"), "unticked");
+  await tap(page.locator(".habit .title").first());
+  assert.match(await hash(), /^#\/habit\/\d+$/);
+  await page.waitForSelector("form.task-form");
+  await shot("habit-page");
+  assert.deepEqual(await strayTapAreas(), []);
+  const h = await page.evaluate(() => { const m = document.getElementById("main"); return [m.scrollHeight, m.clientHeight]; });
+  if (h[0] > h[1]) assert.ok((await swipeUp()) > 20, "habit page should scroll");
+  await tap(page.locator("header .x.back"));
+  assert.equal(await hash(), "#/habits");
+});
+
+test("every page has a way to open the menu on a phone", async () => {
+  for (const r of ["myday", "inbox", "habits", "calendar", "progress", "notifications", "settings"]) {
+    await page.goto(BASE + "/#/" + r);
+    await page.waitForSelector("main header");
+    const burger = page.locator("main header .burger");
+    assert.equal(await burger.count(), 1, r + " has no menu button");
+    await tap(burger);
+    assert.ok(await page.locator(".side.open").count(), r + " menu doesn't open");
+    await page.locator(".scrim").tap({ position: { x: 340, y: 300 } });
+  }
+});
