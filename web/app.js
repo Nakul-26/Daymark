@@ -16,6 +16,7 @@ import { renderProgress } from "./pages/progress.js";
 import { renderNotifications, unreadCount } from "./pages/notifications.js";
 import { renderSettings } from "./pages/settings.js";
 import { renderTaskPage, forgetTaskPage } from "./taskdialog.js";
+import { openAlarm } from "./alarm.js";
 
 const root = document.getElementById("app");
 
@@ -57,13 +58,17 @@ document.addEventListener("daymark:logout", async () => {
 // ---------- routing ----------
 const DETAIL = /^(task|habit)\/\d+$/;
 function onHash() {
-  const raw = location.hash.replace(/^#\/?/, "") || localStorage.getItem("dm:last") || "myday";
+  let raw = location.hash.replace(/^#\/?/, "") || localStorage.getItem("dm:last") || "myday";
+  // a tapped reminder notification (#/alarm/<id>) shows the snooze popup over the last page
+  const alarm = raw.match(/^alarm\/(\d+)$/);
+  if (alarm) { raw = localStorage.getItem("dm:last") || "myday"; history.replaceState(null, "", "#/" + raw); }
   state.route = raw; state.menu = false; state.navs++;
   forgetTaskPage(); forgetHabitPage();
   if (DETAIL.test(raw)) dismissToast(); // a toast would sit on top of the page's Save bar
   if (!DETAIL.test(raw)) try { localStorage.setItem("dm:last", raw); } catch { /* ignore */ }
   draw();
   document.getElementById("main")?.scrollTo(0, 0);
+  if (alarm) openAlarm(Number(alarm[1]));
 }
 window.addEventListener("hashchange", onHash);
 export const go = route => (location.hash = "#/" + route);

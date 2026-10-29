@@ -4,6 +4,7 @@ import { state, render } from "../state.js";
 import { actions } from "../actions.js";
 import { agoLabel } from "../time.js";
 import { openTask } from "../taskdialog.js";
+import { openAlarm } from "../alarm.js";
 
 export const unreadCount = () => state.notifications.filter(n => !n.read_at).length;
 
@@ -18,7 +19,7 @@ export function renderNotifications() {
     state.notifications.length
       ? h("ul", { class: "notifs" }, state.notifications.map(n => h("li", {
         class: "notif" + (n.read_at ? "" : " unread"),
-        onclick: () => { if (!n.read_at) actions.markRead([n.id]); if (n.task_id && state.tasks.some(t => t.id === n.task_id)) openTask(n.task_id); },
+        onclick: () => { if (!n.read_at) actions.markRead([n.id]); if (n.task_id && state.tasks.some(t => t.id === n.task_id)) (n.type === "reminder" ? openAlarm : openTask)(n.task_id); },
       }, h("div", { class: "title" }, (n.type === "reminder" ? "🔔 " : "☀ ") + n.title), n.body && h("div", { class: "muted" }, n.body), h("div", { class: "meta" }, agoLabel(n.created_at)))))
       : h("p", { class: "empty" }, "No notifications yet. Add a reminder to a task and it will show up here."));
 }

@@ -78,7 +78,7 @@ function buildTaskForm(id, close) {
   freq.addEventListener("change", () => { syncRepeat(); if (freq.value && !due.value) due.value = state.calDay || isoDay(); });
 
   // reminders: set of "o:<minutes>" or "c:<YYYY-MM-DDTHH:MM>"
-  const mine = state.reminders.filter(r => r.task_id === t.id);
+  const mine = state.reminders.filter(r => r.task_id === t.id && !r.snooze);
   const picked = new Set(mine.map(r => (r.offset_min != null ? `o:${r.offset_min}` : `c:${r.custom_local}`)));
   const remDiv = h("div", {});
   const custom = h("input", { type: "datetime-local" });

@@ -45,7 +45,7 @@ function syncTask(taskId) {
   const task = db.prepare("SELECT * FROM tasks WHERE id=?").get(taskId);
   if (!task) return;
   const now = new Date().toISOString();
-  for (const r of db.prepare("SELECT * FROM reminders WHERE task_id=?").all(taskId)) {
+  for (const r of db.prepare("SELECT * FROM reminders WHERE task_id=? AND snooze=0").all(taskId)) {
     const remind_at = computeRemindAt(r, task);
     if (remind_at === r.remind_at) continue;
     const rearm = r.status !== "pending" && remind_at && remind_at > now;
@@ -89,7 +89,7 @@ export async function tick() {
         nid = createNotification({ type: "reminder", title: task.title, body, task_id: task.id });
         db.prepare("UPDATE reminders SET notification_id=? WHERE id=?").run(nid, r.id);
       }
-      const res = await pushToAll({ title: task.title, body, url: `/#/task/${task.id}`, tag: `reminder-${r.id}`, task_id: task.id });
+      const res = await pushToAll({ title: task.title, body, url: `/#/alarm/${task.id}`, tag: `reminder-${r.id}`, task_id: task.id });
       if (!res.transient) { finish("sent", `, sent_at='${nowIso}'`); continue; }
       const attempts = r.attempts + 1;
       if (attempts >= 5) { finish("failed", ", last_error='push failed 5 times'"); continue; }
@@ -111,6 +111,8 @@ export default {
        status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0,
        next_attempt_at TEXT, claimed_until TEXT, notification_id INTEGER, sent_at TEXT, last_error TEXT);
      CREATE INDEX reminders_due ON reminders(status, remind_at);`,
+    // a snooze is a one-off alarm at a fixed time; it never touches the task's regular reminders
+    `ALTER TABLE reminders ADD COLUMN snooze INTEGER NOT NULL DEFAULT 0;`,
   ],
   routes: {
     "GET /api/reminders": () => db.prepare(`SELECT r.* FROM reminders r JOIN tasks t ON t.id=r.task_id WHERE t.deleted_at IS NULL`).all(),
@@ -121,12 +123,22 @@ export default {
       const specs = (body?.reminders ?? []).map(parseSpec).slice(0, 6);
       const keep = new Set();
       for (const s of specs) {
-        const same = db.prepare("SELECT id FROM reminders WHERE task_id=? AND offset_min IS ? AND custom_local IS ?").get(task.id, s.offset_min, s.custom_local);
+        const same = db.prepare("SELECT id FROM reminders WHERE task_id=? AND snooze=0 AND offset_min IS ? AND custom_local IS ?").get(task.id, s.offset_min, s.custom_local);
         keep.add(same ? same.id : Number(db.prepare("INSERT INTO reminders(task_id,offset_min,custom_local) VALUES (?,?,?)").run(task.id, s.offset_min, s.custom_local).lastInsertRowid));
       }
-      for (const r of db.prepare("SELECT id FROM reminders WHERE task_id=?").all(task.id))
+      for (const r of db.prepare("SELECT id FROM reminders WHERE task_id=? AND snooze=0").all(task.id))
         if (!keep.has(r.id)) db.prepare("DELETE FROM reminders WHERE id=?").run(r.id);
       syncTask(task.id);
+      return db.prepare("SELECT * FROM reminders WHERE task_id=?").all(task.id);
+    },
+    // Move just this alarm: body.at = ISO time. Replaces an earlier pending snooze; other reminders and repeats are untouched.
+    "POST /api/tasks/:id/snooze": ({ params, body }) => {
+      const task = db.prepare("SELECT * FROM tasks WHERE id=? AND deleted_at IS NULL").get(params.id);
+      if (!task) throw httpError(404, "Task not found");
+      const t = new Date(body?.at).getTime();
+      if (!Number.isFinite(t) || t < Date.now() - 60_000 || t > Date.now() + 2 * 365 * 86400_000) throw httpError(400, "Pick a time in the future");
+      db.prepare("DELETE FROM reminders WHERE task_id=? AND snooze=1 AND status='pending'").run(task.id);
+      db.prepare("INSERT INTO reminders(task_id, remind_at, snooze) VALUES (?,?,1)").run(task.id, new Date(t).toISOString());
       return db.prepare("SELECT * FROM reminders WHERE task_id=?").all(task.id);
     },
   },

@@ -77,6 +77,21 @@ test("reminders: scheduled, delivered once, skipped when task done, expired afte
   assert.equal(db.prepare("SELECT status FROM reminders WHERE task_id=?").get(t3.id).status, "expired");
 });
 
+test("snooze: one extra alarm, regular reminders untouched, survives editing reminders", async () => {
+  const t = r("tasks", "POST /api/tasks")({ body: { title: "Snoozy", due: "2099-01-01", due_time: "10:00" } });
+  r("reminders", "PUT /api/tasks/:id/reminders")({ params: { id: t.id }, body: { reminders: [{ offset_min: 0 }] } });
+  const at = new Date(Date.now() + 5 * 3600_000).toISOString();
+  const all = r("reminders", "POST /api/tasks/:id/snooze")({ params: { id: t.id }, body: { at } });
+  assert.equal(all.length, 2);
+  assert.equal(all.find(x => x.snooze).remind_at, at);
+  r("reminders", "POST /api/tasks/:id/snooze")({ params: { id: t.id }, body: { at: new Date(Date.now() + 86400_000).toISOString() } });
+  assert.equal(db.prepare("SELECT COUNT(*) c FROM reminders WHERE task_id=? AND snooze=1").get(t.id).c, 1, "a new snooze replaces the old one");
+  r("reminders", "PUT /api/tasks/:id/reminders")({ params: { id: t.id }, body: { reminders: [{ offset_min: 0 }] } });
+  assert.equal(db.prepare("SELECT COUNT(*) c FROM reminders WHERE task_id=? AND snooze=1").get(t.id).c, 1, "editing reminders keeps the snooze");
+  assert.equal(db.prepare("SELECT remind_at FROM reminders WHERE task_id=? AND snooze=0").get(t.id).remind_at.slice(0, 10), "2099-01-01");
+  assert.throws(() => r("reminders", "POST /api/tasks/:id/snooze")({ params: { id: t.id }, body: { at: "2001-01-01T00:00:00Z" } }));
+});
+
 test("rescheduling a task moves its reminders", () => {
   const t = r("tasks", "POST /api/tasks")({ body: { title: "Move", due: addDays(today, 3), due_time: "10:00" } });
   const [a] = r("reminders", "PUT /api/tasks/:id/reminders")({ params: { id: t.id }, body: { reminders: [{ offset_min: 30 }] } });

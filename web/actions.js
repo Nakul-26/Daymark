@@ -41,6 +41,14 @@ export const actions = {
     await refreshReminders();
   }),
 
+  // one-off alarm for an already-fired reminder; other reminders and repeats are untouched
+  snooze: (t, when) => act(async () => {
+    await api.snooze(t.id, when.toISOString());
+    await refreshReminders();
+    toast("Reminder set for " + when.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }));
+  }),
+  notify: msg => toast(msg, { error: true }),
+
   star: t => act(async () => { put(state.tasks, await api.patchTask(t.id, { starred: t.starred ? 0 : 1 })); }),
 
   toggle: t => act(async () => {

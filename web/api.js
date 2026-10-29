@@ -32,6 +32,7 @@ export const api = {
   restoreTask: id => post(`/api/tasks/${id}/restore`),
   reorder: ids => post("/api/tasks/reorder", { ids }),
   reminders: () => get("/api/reminders"),
+  snooze: (id, at) => post(`/api/tasks/${id}/snooze`, { at }),
   setReminders: (id, reminders) => put(`/api/tasks/${id}/reminders`, { reminders }),
 
   lists: () => get("/api/lists"),

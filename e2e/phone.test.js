@@ -117,6 +117,8 @@ test("notification opens the task page, which scrolls and goes back", async () =
   await page.goto(BASE + "/#/notifications");
   await page.waitForSelector(".notif");
   await tap(page.locator(".notif").first());
+  await page.waitForSelector("dialog .alarm");
+  await tap(page.locator("dialog .alarm button", { hasText: "Open task" }));
   assert.match(await hash(), /^#\/task\/\d+$/);
   await page.waitForSelector("form.task-form.page");
   assert.deepEqual(await strayTapAreas(), []);
@@ -338,4 +340,50 @@ test("desktop, dark mode: screenshots of every page", async () => {
     await d.screenshot({ path: path.join(process.env.SHOTS || os.tmpdir(), `daymark-desktop-${r}.png`) });
   }
   await dctx.close();
+});
+
+// load the app fresh (so it knows the new task), then follow a notification link
+async function openAlarmFor(id) {
+  await page.goto(BASE + "/#/myday");
+  await page.reload();
+  await page.waitForSelector("main header");
+  await page.goto(BASE + "/#/alarm/" + id);
+}
+
+test("opening a reminder shows the snooze popup; snoozing adds one alarm and keeps the others", async () => {
+  const t = await api("POST", "/api/tasks", { title: "Take pills", due: today, due_time: "23:00" });
+  await api("PUT", `/api/tasks/${t.id}/reminders`, { reminders: [{ offset_min: 0 }, { offset_min: 60 }] });
+  await openAlarmFor(t.id);
+  await page.waitForSelector("dialog .alarm");
+  assert.ok(!(await hash()).includes("alarm"), "the alarm route is replaced, so Back doesn't reopen it");
+  assert.ok(await page.locator("dialog .alarm", { hasText: "Take pills" }).count());
+  for (const label of ["5 hours later", "Tomorrow", "Next week", "Set custom", "Mark done"]) assert.ok(await page.locator("dialog .alarm", { hasText: label }).count(), label);
+  assert.deepEqual(await strayTapAreas(), []);
+  await settle(500);
+  await shot("alarm-popup");
+  assert.ok(await page.locator("dialog .alarm").evaluate(el => { const d = el.closest("dialog").getBoundingClientRect(); return [...el.querySelectorAll("button, input")].every(b => b.getBoundingClientRect().right <= d.right + 1); }), "popup content sticks out of the popup");
+  await tap(page.locator("dialog .alarm button", { hasText: "5 hours later" }));
+  await page.waitForSelector(".toast:has-text('Reminder set')");
+  const rems = (await api("GET", "/api/reminders")).filter(r => r.task_id === t.id);
+  assert.equal(rems.length, 3, "two regular reminders plus one snooze");
+  const sn = rems.find(r => r.snooze);
+  const mins = (new Date(sn.remind_at) - Date.now()) / 60000;
+  assert.ok(mins > 295 && mins < 301, "about 5 hours from now, got " + mins);
+  assert.equal(await page.locator("dialog").count(), 0, "popup closed");
+});
+
+test("reminder popup: custom time and mark done", async () => {
+  const t = await api("POST", "/api/tasks", { title: "Water the plants today" });
+  await openAlarmFor(t.id);
+  await page.waitForSelector("dialog .alarm");
+  const d = new Date(Date.now() + 3 * 86400_000), p2 = n => String(n).padStart(2, "0");
+  await page.fill("dialog .alarm input[type=datetime-local]", `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T09:30`);
+  await tap(page.locator("dialog .alarm button", { hasText: "Set custom" }));
+  await page.waitForSelector(".toast:has-text('Reminder set')");
+  assert.equal((await api("GET", "/api/reminders")).filter(r => r.task_id === t.id && r.snooze).length, 1);
+  await openAlarmFor(t.id);
+  await page.waitForSelector("dialog .alarm");
+  await tap(page.locator("dialog .alarm button", { hasText: "Mark done" }));
+  await page.waitForSelector(".toast:has-text('completed')");
+  assert.ok((await api("GET", "/api/tasks")).find(x => x.id === t.id).done_at, "task is done");
 });
