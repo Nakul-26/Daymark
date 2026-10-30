@@ -177,6 +177,7 @@ function buildTaskForm(id, close) {
       h("button", { value: "delete", formnovalidate: true, class: "danger" }, "Delete"),
       isSub && h("button", { type: "button", title: "Make this a normal task (Ctrl+[)", onclick: () => { close(); actions.unindent(t); } }, "⇤ Unindent"),
       !isSub && !t.done_at && h("button", { type: "button", title: "Make this a subtask of the task above (Ctrl+])", onclick: () => { close(); actions.indentAbove(t); } }, "⇥ Indent"),
+      h("button", { type: "button", title: "Start a timer for this task", onclick: () => actions.timeStart(t.title, t.id) }, "⏱ Track"),
       !isSub && h("button", { type: "button", title: "Move up", onclick: () => actions.nudge(t, -1) }, "↑"),
       !isSub && h("button", { type: "button", title: "Move down", onclick: () => actions.nudge(t, 1) }, "↓")),
     h("div", { class: "row actions" },

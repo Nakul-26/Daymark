@@ -8,6 +8,7 @@ import { taskRow } from "../taskrow.js";
 import { parseQuick } from "../quickadd.js";
 import { habitRow, activeHabits } from "./habits.js";
 import { scheduled } from "../habitstats.js";
+import { runningBar } from "./time.js";
 
 export const sortOf = listId => pref.get("sort:" + listId, "order");
 export const allViews = () => [...VIEWS, ...state.lists.map(l => listView(l, sortOf(l.id)))];
@@ -87,6 +88,7 @@ export function renderTasks(route) {
       list && listMenu(list)),
     h("input", { id: "search-input", class: "search", type: "search", placeholder: "Search all tasks ( / )", value: state.query,
       oninput: e => { state.query = e.target.value; clearTimeout(renderTasks.t); renderTasks.t = setTimeout(() => { render(); const el = document.getElementById("search-input"); el.focus(); el.setSelectionRange(1e4, 1e4); }, 200); } }),
+    myday && runningBar(),
     view.id !== "done" && !q && addForm(viewDefaults(view, today)),
     myday && filterChips(),
     todayHabits.length > 0 && h("section", { class: "group habits-today" }, h("h3", {}, "Habits"), h("ul", { class: "habits" }, todayHabits.map(hb => habitRow(hb)))),

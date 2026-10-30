@@ -35,6 +35,13 @@ export function renderSettings() {
       h("label", { class: "check-row" }, h("input", { type: "checkbox", checked: s.daily_summary === "on", onchange: e => save({ daily_summary: e.target.checked ? "on" : "off" }) }), "Daily summary notification"),
       s.daily_summary === "on" && field("Send at", h("input", { type: "time", value: s.summary_time, onchange: e => e.target.value && save({ summary_time: e.target.value }) }))),
 
+    h("section", { class: "group" }, h("h3", {}, "Time tracking"),
+      h("label", { class: "check-row" }, h("input", { type: "checkbox", checked: s.time_prompt === "on", onchange: e => save({ time_prompt: e.target.checked ? "on" : "off" }) }), "Ask me every hour what I did"),
+      s.time_prompt === "on" && h("div", { class: "row" },
+        field("From", h("input", { type: "time", value: s.time_prompt_from, onchange: e => e.target.value && save({ time_prompt_from: e.target.value }) })),
+        field("Until", h("input", { type: "time", value: s.time_prompt_to, onchange: e => e.target.value && save({ time_prompt_to: e.target.value }) }))),
+      s.time_prompt === "on" && h("small", { class: "muted" }, "A notification just after each full hour in this window, skipped when that hour is already logged.")),
+
     h("section", { class: "group" }, h("h3", {}, "Push notifications"),
       !pushSupported()
         ? h("p", { class: "muted" }, "Not supported in this browser. In-app notifications still work.")

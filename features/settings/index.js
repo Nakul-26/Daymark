@@ -9,6 +9,9 @@ export const DEFAULTS = {
   catch_up_hours: "12",           // reminders older than this after downtime are dropped, not delivered
   daily_summary: "off",
   summary_time: "08:00",
+  time_prompt: "on",             // hourly "what did you do?" notification
+  time_prompt_from: "08:00",
+  time_prompt_to: "22:00",
 };
 const VALIDATE = {
   timezone: validTz,
@@ -16,6 +19,9 @@ const VALIDATE = {
   summary_time: validTime,
   catch_up_hours: v => /^\d{1,3}$/.test(v) && +v >= 1,
   daily_summary: v => v === "on" || v === "off",
+  time_prompt: v => v === "on" || v === "off",
+  time_prompt_from: validTime,
+  time_prompt_to: validTime,
 };
 
 export const getSetting = key => db.prepare("SELECT value FROM settings WHERE key=?").get(key)?.value ?? DEFAULTS[key] ?? null;

@@ -35,6 +35,14 @@ export const api = {
   snooze: (id, at) => post(`/api/tasks/${id}/snooze`, { at }),
   setReminders: (id, reminders) => put(`/api/tasks/${id}/reminders`, { reminders }),
 
+  time: () => get("/api/time"),
+  timeStart: (activity, task_id) => post("/api/time/start", { activity, task_id }),
+  timeStop: () => post("/api/time/stop"),
+  timeAdd: e => post("/api/time", e),
+  timeHour: (hour_start, activity) => post("/api/time/hour", { hour_start, activity }),
+  timeEdit: (id, p) => patch(`/api/time/${id}`, p),
+  timeDelete: id => del(`/api/time/${id}`),
+
   lists: () => get("/api/lists"),
   addList: name => post("/api/lists", { name }),
   renameList: (id, name) => patch(`/api/lists/${id}`, { name }),

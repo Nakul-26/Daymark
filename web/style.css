@@ -340,9 +340,9 @@ a.btn { color: inherit; }
 .settings p, .settings .hint { margin: 0; line-height: 1.45; }
 
 /* sections as cards, so it is obvious what belongs together */
-.settings .group, .progress-page .group { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin: 0 0 16px; max-width: 560px; }
+.settings .group, .progress-page .group, .time-page .group { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin: 0 0 16px; max-width: 560px; }
 .settings .group { gap: 14px; }
-.settings h3, .progress-page h3 { font-size: 12px; letter-spacing: .06em; color: var(--text); margin: 0 0 4px; padding: 0; }
+.settings h3, .progress-page h3, .time-page h3 { font-size: 12px; letter-spacing: .06em; color: var(--text); margin: 0 0 4px; padding: 0; }
 .settings .group input, .settings .group select { background: var(--bg); }
 .progress-page .group { max-width: none; }
 .habit-progress { padding: 12px 0; border-top: 1px solid var(--line); }
@@ -368,3 +368,27 @@ li.habit { padding-top: 10px; padding-bottom: 12px; }
 li.task.overdue { border: 1px solid color-mix(in srgb, var(--danger) 60%, transparent); background: color-mix(in srgb, var(--danger) 7%, transparent); border-radius: 12px; margin: 6px 0; }
 li.task.overdue > .main .check { border-color: var(--danger); }
 li.task.overdue > .main .title { font-weight: 600; }
+
+/* time tracking */
+.time-page .group { max-width: 640px; display: flex; flex-direction: column; gap: 10px; }
+.time-page .group > * { margin-top: 0; margin-bottom: 0; }
+.time-page .pills { margin: 0 0 12px; }
+.time-page .group .pills { margin: 0; }
+.timer .row input { flex: 1; min-width: 0; }
+.timer.running { border-color: var(--accent); }
+.timer .activity { font-size: 20px; font-weight: 600; }
+.timer .elapsed, .timer-bar .elapsed { font-variant-numeric: tabular-nums; }
+.timer .elapsed { font-size: 34px; font-weight: 700; letter-spacing: .02em; }
+.tbars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.tbar-top { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
+.tbar { height: 8px; border-radius: 4px; background: var(--line); margin-top: 4px; overflow: hidden; }
+.tbar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.tentries { list-style: none; margin: 0; padding: 0; }
+.tentries li { display: grid; grid-template-columns: 8.5em 1fr auto; gap: 10px; padding: 11px 0; border-top: 1px solid var(--line); cursor: pointer; align-items: baseline; }
+.tentries li:first-child { border-top: 0; }
+.tentries .when { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.timer-bar { display: flex; align-items: center; gap: 10px; background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 12px; padding: 6px 6px 6px 14px; margin-bottom: 12px; }
+.timer-bar a { color: inherit; text-decoration: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dot-live { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); margin-right: 8px; animation: blink 1.4s infinite; }
+@keyframes blink { 50% { opacity: .25; } }
+@media (max-width: 440px) { .tentries li { grid-template-columns: 1fr auto; } .tentries .when { grid-column: 1 / -1; } }

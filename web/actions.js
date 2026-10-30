@@ -173,6 +173,19 @@ export const actions = {
   }),
   deleteLog: l => act(async () => { await api.delLog(l.id); state.habitLogs = state.habitLogs.filter(x => x.id !== l.id); }),
 
+  // ---- time tracking (every call returns the fresh { entries, running }) ----
+  timeStart: (activity, task_id) => act(async () => { state.time = await api.timeStart(activity, task_id); toast("Tracking: " + activity); }),
+  timeStop: () => act(async () => {
+    const r = state.time.running;
+    if (r) state.time = { ...state.time, running: null, entries: state.time.entries.map(e => (e.id === r.id ? { ...e, end_at: new Date().toISOString() } : e)) }; // instant
+    render();
+    state.time = await api.timeStop();
+  }),
+  timeAdd: e => act(async () => { state.time = await api.timeAdd(e); }),
+  timeHour: (start, activity) => act(async () => { state.time = await api.timeHour(start, activity); toast("Logged: " + activity); }),
+  timeEdit: (id, p) => act(async () => { state.time = await api.timeEdit(id, p); }),
+  timeDelete: id => act(async () => { state.time = await api.timeDelete(id); }),
+
   // ---- notifications & settings ----
   markRead: ids => act(async () => { await api.readNotifications(ids); await refreshNotifications(); }),
   clearNotifications: () => act(async () => { await api.clearNotifications(); state.notifications = []; }),

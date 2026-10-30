@@ -2,7 +2,7 @@
 import { api } from "./api.js";
 
 export const state = {
-  tasks: [], lists: [], reminders: [], captures: [], habits: [], habitLogs: [], notifications: [],
+  tasks: [], lists: [], reminders: [], captures: [], habits: [], habitLogs: [], notifications: [], time: { entries: [], running: null },
   settings: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, default_reminder_time: "09:00" },
   route: "myday",          // see app.js for the list
   menu: false,             // mobile sidebar open
@@ -23,10 +23,10 @@ export const setRenderer = fn => (renderFn = fn);
 export const render = () => renderFn();
 
 export async function loadAll() {
-  const [tasks, lists, reminders, captures, habits, notifications, settings] = await Promise.all([
-    api.tasks(), api.lists(), api.reminders(), api.captures(), api.habits(), api.notifications(), api.settings(),
+  const [tasks, lists, reminders, captures, habits, notifications, settings, time] = await Promise.all([
+    api.tasks(), api.lists(), api.reminders(), api.captures(), api.habits(), api.notifications(), api.settings(), api.time(),
   ]);
-  Object.assign(state, { tasks, lists, reminders, captures, habits: habits.habits, habitLogs: habits.logs, notifications, settings });
+  Object.assign(state, { tasks, lists, reminders, captures, habits: habits.habits, habitLogs: habits.logs, notifications, settings, time });
 }
 
 // Leave a task/habit page: step back in history if we came from inside the app, else go to My Day.

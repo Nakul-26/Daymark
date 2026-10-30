@@ -144,7 +144,7 @@ test("habit: check in and out, open the habit page, scroll, back", async () => {
 });
 
 test("every page has a way to open the menu on a phone", async () => {
-  for (const r of ["myday", "inbox", "habits", "calendar", "progress", "notifications", "settings"]) {
+  for (const r of ["myday", "inbox", "time", "habits", "calendar", "progress", "notifications", "settings"]) {
     await page.goto(BASE + "/#/" + r);
     await page.waitForSelector("main header");
     const burger = page.locator("main header .burger");
@@ -158,7 +158,7 @@ test("every page has a way to open the menu on a phone", async () => {
 // ---------- wider sweep ----------
 
 test("every page: no sideways overflow, no stray tap areas, no console errors", async () => {
-  for (const r of ["myday", "upcoming", "starred", "all", "done", "inbox", "habits", "calendar", "progress", "notifications", "settings"]) {
+  for (const r of ["myday", "upcoming", "starred", "all", "done", "inbox", "time", "habits", "calendar", "progress", "notifications", "settings"]) {
     await page.goto(BASE + "/#/" + r);
     await page.waitForSelector("main header");
     await settle(300);
@@ -318,7 +318,7 @@ const small = () => page.evaluate(() => {
 });
 test("ease of use: every tap target is at least 40px", async () => {
   const report = {};
-  for (const r of ["myday", "upcoming", "inbox", "habits", "calendar", "progress", "notifications", "settings"]) {
+  for (const r of ["myday", "upcoming", "inbox", "time", "habits", "calendar", "progress", "notifications", "settings"]) {
     await page.goto(BASE + "/#/" + r); await page.waitForSelector("main header"); await settle(300);
     report[r] = await small();
   }
@@ -331,7 +331,7 @@ test("ease of use: every tap target is at least 40px", async () => {
 test("desktop, dark mode: screenshots of every page", async () => {
   const dctx = await browser.newContext({ viewport: { width: 1100, height: 760 }, colorScheme: "dark" });
   const d = await dctx.newPage();
-  for (const r of ["myday", "habits", "calendar", "progress", "inbox", "notifications", "settings"]) {
+  for (const r of ["myday", "time", "habits", "calendar", "progress", "inbox", "notifications", "settings"]) {
     await d.goto(BASE + "/#/" + r);
     await d.waitForSelector("main header");
     await d.waitForTimeout(300);
@@ -405,4 +405,78 @@ test("opening the app always starts on My Day, even after visiting another page"
   await page.reload();
   await page.waitForSelector("main header h2");
   assert.equal(await page.locator("main header h2").first().innerText(), "My Day");
+});
+
+test("time: start a timer, see it running, stop it, entry shows up", async () => {
+  await page.goto(BASE + "/#/time");
+  await page.waitForSelector(".time-page .timer");
+  await page.fill(".timer input", "Reading");
+  await tap(page.locator(".timer button.primary"));
+  await page.waitForSelector(".timer.running .activity:text('Reading')");
+  const t1 = await page.locator(".timer .elapsed").innerText();
+  await settle(2200);
+  assert.notEqual(await page.locator(".timer .elapsed").innerText(), t1, "the clock ticks");
+  await shot("time-running");
+  await page.goto(BASE + "/#/myday");
+  await page.waitForSelector(".timer-bar");
+  assert.ok(await page.locator(".timer-bar", { hasText: "Reading" }).count(), "running bar on My Day");
+  await tap(page.locator(".timer-bar button"));
+  assert.equal(await page.locator(".timer-bar").count(), 0, "stopped");
+  assert.ok((await api("GET", "/api/time")).entries.some(e => e.activity === "Reading" && e.end_at));
+  await page.goto(BASE + "/#/time");
+  await page.waitForSelector(".tentries li:has-text('Reading')");
+  assert.ok(await page.locator(".timer .pill", { hasText: "Reading" }).count(), "recent activity pill");
+  await tap(page.locator(".timer .pill", { hasText: "Reading" }));
+  await page.waitForSelector(".timer.running");
+  await tap(page.locator(".timer button.primary", { hasText: "Stop" }));
+  assert.deepEqual(await strayTapAreas(), []);
+});
+
+test("time: add an entry by hand, edit it, delete it", async () => {
+  await page.goto(BASE + "/#/time");
+  await tap(page.locator("main header button", { hasText: "+ Add" }));
+  await page.waitForSelector("dialog form");
+  await page.fill("dialog input[type=text]", "Gym");
+  await tap(page.locator("dialog button.primary"));
+  await page.waitForSelector(".tentries li:has-text('Gym')");
+  await tap(page.locator(".tentries li", { hasText: "Gym" }));
+  await page.fill("dialog input[type=text]", "Gym session");
+  await tap(page.locator("dialog button.primary"));
+  await page.waitForSelector(".tentries li:has-text('Gym session')");
+  page.once("dialog", d => d.accept());
+  await tap(page.locator(".tentries li", { hasText: "Gym session" }));
+  await shot("time-entry");
+  await tap(page.locator("dialog button.danger"));
+  await page.waitForFunction(() => !document.body.innerText.includes("Gym session"));
+});
+
+test("time: the hourly prompt link opens a popup and logs that hour", async () => {
+  const hourStart = Math.floor(Date.now() / 3600_000) * 3600_000 - 3600_000;
+  await page.goto(BASE + "/#/myday");
+  await page.reload();
+  await page.waitForSelector("main header");
+  await page.goto(BASE + "/#/hour/" + hourStart);
+  await page.waitForSelector("dialog .alarm");
+  assert.ok(!(await hash()).includes("hour"), "route replaced");
+  assert.ok(await page.locator("dialog .pill", { hasText: "Reading" }).count(), "recent activities offered");
+  await settle(500);
+  await shot("hour-popup");
+  await tap(page.locator("dialog .pill", { hasText: "Reading" }));
+  await page.waitForSelector(".toast:has-text('Logged')");
+  const e = (await api("GET", "/api/time")).entries.find(x => x.source === "hourly");
+  assert.equal(new Date(e.start_at).getTime(), hourStart);
+  assert.equal(e.activity, "Reading");
+});
+
+test("time: Track button on a task starts a timer linked to it", async () => {
+  const t = await api("POST", "/api/tasks", { title: "Write report" });
+  await page.goto(BASE + "/#/myday");
+  await page.reload();
+  await page.goto(BASE + "/#/task/" + t.id);
+  await page.waitForSelector("form.task-form.page");
+  await tap(page.locator("button", { hasText: "⏱ Track" }));
+  await page.waitForSelector(".toast:has-text('Tracking: Write report')");
+  const r = (await api("GET", "/api/time")).running;
+  assert.equal(r.task_id, t.id);
+  await api("POST", "/api/time/stop");
 });

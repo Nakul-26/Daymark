@@ -17,12 +17,14 @@ import { renderNotifications, unreadCount } from "./pages/notifications.js";
 import { renderSettings } from "./pages/settings.js";
 import { renderTaskPage, forgetTaskPage } from "./taskdialog.js";
 import { openAlarm } from "./alarm.js";
+import { renderTime, openHourLog } from "./pages/time.js";
 
 const root = document.getElementById("app");
 
-const PAGES = { inbox: renderInbox, habits: renderHabits, calendar: renderCalendar, progress: renderProgress, notifications: renderNotifications, settings: renderSettings };
+const PAGES = { time: renderTime, inbox: renderInbox, habits: renderHabits, calendar: renderCalendar, progress: renderProgress, notifications: renderNotifications, settings: renderSettings };
 const SIDEBAR_PAGES = [
   { id: "inbox", label: "Inbox", icon: "📥", badge: () => state.captures.filter(c => c.status === "inbox").length },
+  { id: "time", label: "Time", icon: "⏱", badge: () => (state.time.running ? "●" : 0) },
   { id: "habits", label: "Habits & goals", icon: "🔁" },
   { id: "calendar", label: "Calendar", icon: "🗓" },
   { id: "progress", label: "Progress", icon: "📈" },
@@ -60,14 +62,14 @@ const DETAIL = /^(task|habit)\/\d+$/;
 function onHash() {
   let raw = location.hash.replace(/^#\/?/, "") || "myday"; // opening the app always starts on My Day
   // a tapped reminder notification (#/alarm/<id>) shows the snooze popup over the last page
-  const alarm = raw.match(/^alarm\/(\d+)$/);
+  const alarm = raw.match(/^(?:alarm|hour)\/(\d+)$/), isHour = raw.startsWith("hour/");
   if (alarm) { raw = "myday"; history.replaceState(null, "", "#/" + raw); }
   state.route = raw; state.menu = false; state.navs++;
   forgetTaskPage(); forgetHabitPage();
   if (DETAIL.test(raw)) dismissToast(); // a toast would sit on top of the page's Save bar
   draw();
   document.getElementById("main")?.scrollTo(0, 0);
-  if (alarm) openAlarm(Number(alarm[1]));
+  if (alarm) (isHour ? openHourLog : openAlarm)(Number(alarm[1]));
 }
 window.addEventListener("hashchange", onHash);
 export const go = route => (location.hash = "#/" + route);

@@ -9,7 +9,7 @@ process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "daymark-test-"));
 const { db, migrate } = await import("../core/db.js");
 const { events } = await import("../core/events.js");
 const mods = {};
-for (const n of ["settings", "lists", "tasks", "notifications", "push", "reminders", "captures", "habits", "summary"])
+for (const n of ["settings", "lists", "tasks", "notifications", "push", "reminders", "captures", "habits", "summary", "time"])
   mods[n] = (await import(`../features/${n}/index.js`)).default;
 for (const f of Object.values(mods)) migrate(f.name, f.migrations);
 mods.reminders.start(); // registers event listeners (also starts the timer, which is unref'd)
@@ -196,4 +196,49 @@ test("reminder text reads like a task app, not a timestamp", async () => {
   assert.equal(reminderBody({ due: today }, "My Tasks", today), "Today · My Tasks");
   assert.equal(reminderBody({ due: null }, "My Tasks", today), "My Tasks");
   assert.match(reminderBody({ due: addDays(today, 9), due_time: "12:00" }, "", today), /^\w{3}, \w{3} \d+, 12:00 PM$/);
+});
+
+test("time: one running timer at a time, manual and hourly entries, validation", () => {
+  const T = k => mods.time.routes[k];
+  const a = T("POST /api/time/start")({ body: { activity: "  Reading  " } });
+  assert.equal(a.running.activity, "Reading");
+  const b = T("POST /api/time/start")({ body: { activity: "Coding" } });
+  assert.equal(b.running.activity, "Coding");
+  assert.equal(b.entries.filter(e => !e.end_at).length, 1, "starting a timer stops the previous one");
+  assert.ok(b.entries.find(e => e.activity === "Reading").end_at);
+  assert.equal(T("POST /api/time/stop")({}).running, null);
+
+  const start = new Date(Date.now() - 3 * 3600_000).toISOString(), end = new Date(Date.now() - 2 * 3600_000).toISOString();
+  const m = T("POST /api/time")({ body: { activity: "Gym", start_at: start, end_at: end } });
+  assert.equal(m.entries.find(e => e.activity === "Gym").source, "manual");
+  assert.throws(() => T("POST /api/time")({ body: { activity: "Bad", start_at: end, end_at: start } }));
+  assert.throws(() => T("POST /api/time")({ body: { activity: "", start_at: start, end_at: end } }));
+
+  const hour = Date.now() - 6 * 3600_000;
+  T("POST /api/time/hour")({ body: { hour_start: hour, activity: "Email" } });
+  const again = T("POST /api/time/hour")({ body: { hour_start: hour, activity: "Email and calls" } });
+  assert.equal(again.entries.filter(e => e.source === "hourly").length, 1, "answering the same hour again replaces it");
+  assert.throws(() => T("POST /api/time/hour")({ body: { hour_start: Date.now() + 86400_000, activity: "Future" } }));
+
+  const id = again.entries.find(e => e.activity === "Gym").id;
+  assert.equal(T("PATCH /api/time/:id")({ params: { id }, body: { activity: "Gym session" } }).entries.find(e => e.id === id).activity, "Gym session");
+  assert.ok(!T("DELETE /api/time/:id")({ params: { id } }).entries.some(e => e.id === id));
+});
+
+test("time: hourly prompt only inside the window, once per hour, and not for hours already logged", async () => {
+  const { maybeAskAboutHour } = await import("../features/time/index.js");
+  const at = (day, hhmm) => new Date(new Date(`${day}T${hhmm}:00+05:30`).getTime());
+  setSetting("time_prompt", "on"); setSetting("time_prompt_from", "08:00"); setSetting("time_prompt_to", "22:00");
+  const day = "2031-03-10";
+  assert.equal(await maybeAskAboutHour(at(day, "07:03")), false, "before the window");
+  assert.equal(await maybeAskAboutHour(at(day, "10:30")), false, "not just after the hour");
+  assert.equal(await maybeAskAboutHour(at(day, "10:02")), true, "asks about 9-10");
+  assert.equal(await maybeAskAboutHour(at(day, "10:05")), false, "only once per hour");
+  const s = at(day, "10:00").getTime(); // log 10:00-11:00, which the 11:01 prompt would ask about
+  db.prepare("INSERT INTO time_entries(activity,start_at,end_at,source) VALUES ('Study',?,?,'manual')").run(new Date(s).toISOString(), new Date(s + 3600_000).toISOString());
+  assert.equal(await maybeAskAboutHour(at(day, "11:01")), false, "that hour is already logged");
+  assert.equal(await maybeAskAboutHour(at(day, "22:01")), true, "21-22 is the last prompt");
+  assert.equal(await maybeAskAboutHour(at(day, "23:01")), false, "after the window");
+  setSetting("time_prompt", "off");
+  assert.equal(await maybeAskAboutHour(at(day, "15:01")), false, "switched off");
 });
