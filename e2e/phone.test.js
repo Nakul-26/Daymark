@@ -397,3 +397,12 @@ test("overdue tasks have a red border", async () => {
   assert.equal(await page.locator("li.task.overdue", { hasText: "Buy oat milk" }).count(), 0, "today's tasks are not overdue");
   await shot("overdue");
 });
+
+test("opening the app always starts on My Day, even after visiting another page", async () => {
+  await page.goto(BASE + "/#/settings");
+  await page.waitForSelector(".settings");
+  await page.goto(BASE + "/");
+  await page.reload();
+  await page.waitForSelector("main header h2");
+  assert.equal(await page.locator("main header h2").first().innerText(), "My Day");
+});
