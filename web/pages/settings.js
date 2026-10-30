@@ -35,6 +35,16 @@ export function renderSettings() {
       h("label", { class: "check-row" }, h("input", { type: "checkbox", checked: s.daily_summary === "on", onchange: e => save({ daily_summary: e.target.checked ? "on" : "off" }) }), "Daily summary notification"),
       s.daily_summary === "on" && field("Send at", h("input", { type: "time", value: s.summary_time, onchange: e => e.target.value && save({ summary_time: e.target.value }) }))),
 
+    h("section", { class: "group" }, h("h3", {}, "Reports"),
+      h("label", { class: "check-row" }, h("input", { type: "checkbox", checked: s.daily_report === "on", onchange: e => save({ daily_report: e.target.checked ? "on" : "off" }) }), "Daily report"),
+      s.daily_report === "on" && field("Send at", h("input", { type: "time", value: s.daily_report_time, onchange: e => e.target.value && save({ daily_report_time: e.target.value }) })),
+      h("label", { class: "check-row" }, h("input", { type: "checkbox", checked: s.weekly_report === "on", onchange: e => save({ weekly_report: e.target.checked ? "on" : "off" }) }), "Weekly report"),
+      s.weekly_report === "on" && h("div", { class: "row" },
+        field("On", h("select", { onchange: e => save({ weekly_report_day: e.target.value }) },
+          ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((d, i) => h("option", { value: String(i), selected: s.weekly_report_day === String(i) }, d)))),
+        field("At", h("input", { type: "time", value: s.weekly_report_time, onchange: e => e.target.value && save({ weekly_report_time: e.target.value }) }))),
+      h("small", { class: "muted" }, "Sent once as a notification. Open Reports in the menu any time to see any day or week.")),
+
     h("section", { class: "group" }, h("h3", {}, "Time tracking"),
       h("label", { class: "check-row" }, h("input", { type: "checkbox", checked: s.time_prompt === "on", onchange: e => save({ time_prompt: e.target.checked ? "on" : "off" }) }), "Ask me every hour what I did"),
       s.time_prompt === "on" && h("div", { class: "row" },

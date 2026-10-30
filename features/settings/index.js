@@ -9,6 +9,11 @@ export const DEFAULTS = {
   catch_up_hours: "12",           // reminders older than this after downtime are dropped, not delivered
   daily_summary: "off",
   summary_time: "08:00",
+  daily_report: "on",            // evening recap of the day
+  daily_report_time: "21:00",
+  weekly_report: "on",           // recap of the Monday-Sunday week
+  weekly_report_day: "0",        // 0 = Sunday
+  weekly_report_time: "20:00",
   time_prompt: "on",             // hourly "what did you do?" notification
   time_prompt_from: "08:00",
   time_prompt_to: "22:00",
@@ -19,6 +24,11 @@ const VALIDATE = {
   summary_time: validTime,
   catch_up_hours: v => /^\d{1,3}$/.test(v) && +v >= 1,
   daily_summary: v => v === "on" || v === "off",
+  daily_report: v => v === "on" || v === "off",
+  daily_report_time: validTime,
+  weekly_report: v => v === "on" || v === "off",
+  weekly_report_day: v => /^[0-6]$/.test(v),
+  weekly_report_time: validTime,
   time_prompt: v => v === "on" || v === "off",
   time_prompt_from: validTime,
   time_prompt_to: validTime,

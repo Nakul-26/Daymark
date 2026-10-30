@@ -392,3 +392,14 @@ li.task.overdue > .main .title { font-weight: 600; }
 .dot-live { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); margin-right: 8px; animation: blink 1.4s infinite; }
 @keyframes blink { 50% { opacity: .25; } }
 @media (max-width: 440px) { .tentries li { grid-template-columns: 1fr auto; } .tentries .when { grid-column: 1 / -1; } }
+
+/* reports */
+.report-nav { align-items: center; margin: 4px 0 14px; }
+.report-nav b { text-align: center; }
+.report-page .group { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin: 0 0 16px; max-width: 560px; }
+.report-page .tiles, .report-page .pills, .report-nav { max-width: 560px; }
+.report-page ul.plain { list-style: none; padding: 0; margin: 0; }
+.report-page ul.plain li { padding: 6px 0; }
+.report-nav button { min-width: 44px; font-size: 20px; }
+.report-page .group { display: flex; flex-direction: column; gap: 10px; max-width: none; }
+.report-page .group > * { margin-top: 0; margin-bottom: 0; }

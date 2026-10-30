@@ -9,7 +9,7 @@ process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "daymark-test-"));
 const { db, migrate } = await import("../core/db.js");
 const { events } = await import("../core/events.js");
 const mods = {};
-for (const n of ["settings", "lists", "tasks", "notifications", "push", "reminders", "captures", "habits", "summary", "time"])
+for (const n of ["settings", "lists", "tasks", "notifications", "push", "reminders", "captures", "habits", "summary", "time", "reports"])
   mods[n] = (await import(`../features/${n}/index.js`)).default;
 for (const f of Object.values(mods)) migrate(f.name, f.migrations);
 mods.reminders.start(); // registers event listeners (also starts the timer, which is unref'd)
@@ -241,4 +241,24 @@ test("time: hourly prompt only inside the window, once per hour, and not for hou
   assert.equal(await maybeAskAboutHour(at(day, "23:01")), false, "after the window");
   setSetting("time_prompt", "off");
   assert.equal(await maybeAskAboutHour(at(day, "15:01")), false, "switched off");
+});
+
+test("reports: day and week numbers, and the automatic report is sent once", async () => {
+  const { maybeSendReports, buildReport } = await import("../features/reports/index.js");
+  const t = r("tasks", "POST /api/tasks")({ body: { title: "Report me" } });
+  r("tasks", "POST /api/tasks/:id/complete")({ params: { id: t.id }, body: {} });
+  const hb = r("habits", "POST /api/habits")({ body: { name: "Read", days: [0, 1, 2, 3, 4, 5, 6] } });
+  r("habits", "POST /api/habits/:id/toggle")({ params: { id: hb.id }, body: { day: today } });
+  r("time", "POST /api/time")({ body: { activity: "Study", start_at: new Date(Date.now() - 2 * 36e5).toISOString(), end_at: new Date(Date.now() - 36e5).toISOString() } });
+  const day = buildReport("day", today), week = buildReport("week", today);
+  assert.ok(day.tasks.done >= 1 && week.tasks.done >= day.tasks.done);
+  assert.equal(week.tasks.byDay.length, 7);
+  assert.ok(day.habits.find(x => x.name === "Read").hit === 1);
+  assert.ok(week.time.byActivity.find(x => x.activity === "Study"));
+  setSetting("daily_report_time", "00:00"); setSetting("weekly_report", "off");
+  const before = r("notifications", "GET /api/notifications")().length;
+  assert.equal(await maybeSendReports(), 1);
+  assert.equal(await maybeSendReports(), 0);
+  assert.equal(r("notifications", "GET /api/notifications")().length, before + 1);
+  assert.throws(() => r("reports", "GET /api/report")({ query: { date: "nope" } }), /Bad date/);
 });

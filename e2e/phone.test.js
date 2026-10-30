@@ -144,7 +144,7 @@ test("habit: check in and out, open the habit page, scroll, back", async () => {
 });
 
 test("every page has a way to open the menu on a phone", async () => {
-  for (const r of ["myday", "inbox", "time", "habits", "calendar", "progress", "notifications", "settings"]) {
+  for (const r of ["myday", "inbox", "time", "habits", "calendar", "progress", "report", "notifications", "settings"]) {
     await page.goto(BASE + "/#/" + r);
     await page.waitForSelector("main header");
     const burger = page.locator("main header .burger");
@@ -158,7 +158,7 @@ test("every page has a way to open the menu on a phone", async () => {
 // ---------- wider sweep ----------
 
 test("every page: no sideways overflow, no stray tap areas, no console errors", async () => {
-  for (const r of ["myday", "upcoming", "starred", "all", "done", "inbox", "time", "habits", "calendar", "progress", "notifications", "settings"]) {
+  for (const r of ["myday", "upcoming", "starred", "all", "done", "inbox", "time", "habits", "calendar", "progress", "report", "notifications", "settings"]) {
     await page.goto(BASE + "/#/" + r);
     await page.waitForSelector("main header");
     await settle(300);
@@ -318,7 +318,7 @@ const small = () => page.evaluate(() => {
 });
 test("ease of use: every tap target is at least 40px", async () => {
   const report = {};
-  for (const r of ["myday", "upcoming", "inbox", "time", "habits", "calendar", "progress", "notifications", "settings"]) {
+  for (const r of ["myday", "upcoming", "inbox", "time", "habits", "calendar", "progress", "report", "notifications", "settings"]) {
     await page.goto(BASE + "/#/" + r); await page.waitForSelector("main header"); await settle(300);
     report[r] = await small();
   }
@@ -331,7 +331,7 @@ test("ease of use: every tap target is at least 40px", async () => {
 test("desktop, dark mode: screenshots of every page", async () => {
   const dctx = await browser.newContext({ viewport: { width: 1100, height: 760 }, colorScheme: "dark" });
   const d = await dctx.newPage();
-  for (const r of ["myday", "time", "habits", "calendar", "progress", "inbox", "notifications", "settings"]) {
+  for (const r of ["myday", "time", "habits", "calendar", "progress", "report", "inbox", "notifications", "settings"]) {
     await d.goto(BASE + "/#/" + r);
     await d.waitForSelector("main header");
     await d.waitForTimeout(300);
@@ -479,4 +479,25 @@ test("time: Track button on a task starts a timer linked to it", async () => {
   const r = (await api("GET", "/api/time")).running;
   assert.equal(r.task_id, t.id);
   await api("POST", "/api/time/stop");
+});
+
+test("reports: daily and weekly numbers, switching and stepping back; report notification opens its report", async () => {
+  const t = await api("POST", "/api/tasks", { title: "Finish report check" });
+  await api("POST", `/api/tasks/${t.id}/complete`);
+  await page.goto(BASE + "/#/myday");
+  await page.reload();
+  await page.goto(BASE + "/#/report");
+  await page.waitForSelector(".report-page .tiles");
+  assert.ok(await page.locator(".report-page", { hasText: "Finish report check" }).count(), "today's completed task listed");
+  await shot("report-day");
+  await tap(page.locator(".report-page .pill", { hasText: "Weekly" }));
+  await page.waitForSelector(".report-page .bars");
+  assert.equal(await page.locator(".report-nav b").innerText(), "This week");
+  await shot("report-week");
+  await tap(page.locator(".report-nav button[aria-label=Previous]"));
+  await page.waitForFunction(() => !document.querySelector(".report-nav b").textContent.includes("This week"));
+  await tap(page.locator(".report-page .pill", { hasText: "Daily" }));
+  await page.goto(BASE + "/#/report/week");
+  await page.waitForSelector(".report-page .bars");
+  assert.equal(await hash(), "#/report");
 });

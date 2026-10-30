@@ -18,16 +18,18 @@ import { renderSettings } from "./pages/settings.js";
 import { renderTaskPage, forgetTaskPage } from "./taskdialog.js";
 import { openAlarm } from "./alarm.js";
 import { renderTime, openHourLog } from "./pages/time.js";
+import { renderReport, showReport } from "./pages/report.js";
 
 const root = document.getElementById("app");
 
-const PAGES = { time: renderTime, inbox: renderInbox, habits: renderHabits, calendar: renderCalendar, progress: renderProgress, notifications: renderNotifications, settings: renderSettings };
+const PAGES = { report: renderReport, time: renderTime, inbox: renderInbox, habits: renderHabits, calendar: renderCalendar, progress: renderProgress, notifications: renderNotifications, settings: renderSettings };
 const SIDEBAR_PAGES = [
   { id: "inbox", label: "Inbox", icon: "📥", badge: () => state.captures.filter(c => c.status === "inbox").length },
   { id: "time", label: "Time", icon: "⏱", badge: () => (state.time.running ? "●" : 0) },
   { id: "habits", label: "Habits & goals", icon: "🔁" },
   { id: "calendar", label: "Calendar", icon: "🗓" },
   { id: "progress", label: "Progress", icon: "📈" },
+  { id: "report", label: "Reports", icon: "🧾" },
   { id: "notifications", label: "Notifications", icon: "🔔", badge: unreadCount, badgeId: "badge-notifications" },
   { id: "settings", label: "Settings", icon: "⚙" },
 ];
@@ -64,6 +66,8 @@ function onHash() {
   // a tapped reminder notification (#/alarm/<id>) shows the snooze popup over the last page
   const alarm = raw.match(/^(?:alarm|hour)\/(\d+)$/), isHour = raw.startsWith("hour/");
   if (alarm) { raw = "myday"; history.replaceState(null, "", "#/" + raw); }
+  const rep = raw.match(/^report\/(day|week)$/); // a report notification opens that report
+  if (rep) { showReport(rep[1]); raw = "report"; history.replaceState(null, "", "#/report"); }
   state.route = raw; state.menu = false; state.navs++;
   forgetTaskPage(); forgetHabitPage();
   if (DETAIL.test(raw)) dismissToast(); // a toast would sit on top of the page's Save bar

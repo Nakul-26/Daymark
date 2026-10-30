@@ -16,11 +16,12 @@ import reminders from "./features/reminders/index.js";
 import captures from "./features/captures/index.js";
 import habits from "./features/habits/index.js";
 import summary from "./features/summary/index.js";
+import reports from "./features/reports/index.js";
 import time from "./features/time/index.js";
 import system from "./features/system/index.js";
 
 // Order matters for migrations: a feature must come after the ones whose tables it references.
-const FEATURES = [settings, lists, tasks, notifications, push, reminders, captures, habits, time, summary, system];
+const FEATURES = [settings, lists, tasks, notifications, push, reminders, captures, habits, time, summary, reports, system];
 
 for (const f of FEATURES) migrate(f.name, f.migrations);
 const route = buildRouter(FEATURES);
