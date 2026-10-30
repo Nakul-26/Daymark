@@ -48,7 +48,8 @@ export function renderSettings() {
         : h("div", { class: "row" },
           pushOn
             ? [h("span", {}, "✅ Enabled on this device"), h("button", { onclick: async () => { await disablePush(); await refreshExtra(); } }, "Turn off"),
-              h("button", { onclick: async () => { try { await api.pushTest(); toast("Test sent"); } catch (e) { toast(e.message, { error: true }); } } }, "Send test")]
+              h("button", { onclick: async () => { try { await api.pushTest(); toast("Test sent"); } catch (e) { toast(e.message, { error: true }); } } }, "Send test"),
+              h("button", { onclick: async () => { try { await api.pushTest(60); toast("Sending in 60s. Close the app and lock your phone now"); } catch (e) { toast(e.message, { error: true }); } } }, "Test in 60s")]
             : [h("button", { class: "primary", onclick: async () => { try { await enablePush(); toast("Push enabled"); await refreshExtra(); } catch (e) { toast(e.message, { error: true }); } } }, "Enable on this device")]),
       !location.protocol.startsWith("https") && location.hostname !== "localhost" && h("p", { class: "hint" }, "Push needs HTTPS. Open the app through your secure URL."),
       subs.length > 0 && h("ul", { class: "plain" }, subs.map(d => h("li", { class: "row" }, h("span", { class: "grow" }, `${d.label || "Device"} · added ${d.created_at.slice(0, 10)}`),

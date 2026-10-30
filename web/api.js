@@ -71,7 +71,7 @@ export const api = {
   pushSubs: () => get("/api/push/subscriptions"),
   pushSubscribe: (subscription, label) => post("/api/push/subscribe", { subscription, label }),
   pushUnsubscribe: p => post("/api/push/unsubscribe", p),
-  pushTest: () => post("/api/push/test"),
+  pushTest: delay => post("/api/push/test", delay ? { delay } : undefined),
 
   backups: () => get("/api/backups"),
   backupNow: () => post("/api/backups"),

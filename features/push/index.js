@@ -60,7 +60,12 @@ export default {
         .run(new Date().toISOString(), String(body?.endpoint ?? ""), body?.id ?? -1);
       return { ok: true };
     },
-    "POST /api/push/test": async () => {
+    "POST /api/push/test": async ({ body }) => {
+      const delay = Math.min(300, Math.max(0, Number(body?.delay) || 0)); // seconds: lets you lock the phone first
+      if (delay) {
+        setTimeout(() => pushToAll({ title: "Delayed test ✓", body: `Sent ${delay}s after you asked, while the app was closed.`, url: "/#/notifications" }).catch(() => {}), delay * 1000);
+        return { delayed: delay };
+      }
       const r = await pushToAll({ title: "Notifications are on ✓", body: "Daymark can now remind you of your tasks on this device.", url: "/#/notifications" });
       if (!r.sent) throw httpError(400, "No device received it. Enable notifications on a device first.");
       return r;
