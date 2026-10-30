@@ -262,3 +262,21 @@ test("reports: day and week numbers, and the automatic report is sent once", asy
   assert.equal(r("notifications", "GET /api/notifications")().length, before + 1);
   assert.throws(() => r("reports", "GET /api/report")({ query: { date: "nope" } }), /Bad date/);
 });
+
+test("time: the hourly answer skips minutes already covered; forgotten timers get a nudge, then stop", async () => {
+  const { checkForgottenTimer } = await import("../features/time/index.js");
+  const T = k => mods.time.routes[k];
+  const hour = Math.floor((Date.now() - 20 * 3600_000) / 3600_000) * 3600_000;
+  T("POST /api/time")({ body: { activity: "Walk", start_at: new Date(hour + 10 * 60_000).toISOString(), end_at: new Date(hour + 40 * 60_000).toISOString() } });
+  const snap = T("POST /api/time/hour")({ body: { hour_start: hour, activity: "Reading" } });
+  const mine = snap.entries.filter(e => e.source === "hourly" && new Date(e.start_at).getTime() >= hour && new Date(e.start_at).getTime() < hour + 3600_000);
+  assert.equal(mine.length, 2, "before and after the walk");
+  assert.equal(mine.reduce((s, e) => s + (new Date(e.end_at) - new Date(e.start_at)), 0), 30 * 60_000, "30 uncovered minutes");
+
+  db.prepare("DELETE FROM time_entries WHERE end_at IS NULL").run();
+  db.prepare("INSERT INTO time_entries(activity,start_at,source) VALUES ('Forgot', ?, 'timer')").run(new Date(Date.now() - 5 * 3600_000).toISOString());
+  assert.equal(await checkForgottenTimer(), "nudged");
+  assert.equal(await checkForgottenTimer(), null, "nudged once");
+  assert.equal(await checkForgottenTimer(Date.now() + 8 * 3600_000), "stopped");
+  assert.equal(db.prepare("SELECT COUNT(*) c FROM time_entries WHERE end_at IS NULL").get().c, 0);
+});

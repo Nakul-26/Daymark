@@ -6,8 +6,10 @@ import { httpError } from "../../core/router.js";
 import { dayIn, timeIn, localToUtc } from "../../core/time.js";
 import { getSetting, setSetting } from "../settings/index.js";
 import { pushToAll } from "../push/index.js";
+import { createNotification } from "../notifications/index.js";
 
 const HOUR = 3600_000, KEEP_DAYS = 60;
+const NUDGE_AFTER = 4 * HOUR, AUTO_STOP_AFTER = 12 * HOUR; // a timer someone forgot to stop
 
 const snapshot = () => {
   const since = new Date(Date.now() - KEEP_DAYS * 86400_000).toISOString();
@@ -45,6 +47,39 @@ export function covered(from, to, now = Date.now()) {
     if (f > s) sum += f - s;
   }
   return sum;
+}
+
+// The parts of [from,to] (ms) that no entry covers yet. A running timer counts up to `now`.
+export function uncovered(from, to, now = Date.now()) {
+  const busy = db.prepare("SELECT start_at, end_at FROM time_entries WHERE start_at<? AND (end_at IS NULL OR end_at>?) ORDER BY start_at")
+    .all(new Date(to).toISOString(), new Date(from).toISOString())
+    .map(e => [Math.max(new Date(e.start_at).getTime(), from), Math.min(e.end_at ? new Date(e.end_at).getTime() : now, to)]).filter(([s, f]) => f > s);
+  const gaps = []; let at = from;
+  for (const [s, f] of busy) { if (s > at) gaps.push([at, s]); at = Math.max(at, f); }
+  if (at < to) gaps.push([at, to]);
+  return gaps.filter(([s, f]) => f - s >= 60_000);
+}
+
+// Every minute: remind about a timer that has run a long time, and stop it if it clearly was forgotten.
+export async function checkForgottenTimer(now = Date.now()) {
+  const run = db.prepare("SELECT * FROM time_entries WHERE end_at IS NULL").get();
+  if (!run) return null;
+  const age = now - new Date(run.start_at).getTime();
+  if (age >= AUTO_STOP_AFTER) {
+    db.prepare("UPDATE time_entries SET end_at=? WHERE id=?").run(new Date(new Date(run.start_at).getTime() + AUTO_STOP_AFTER).toISOString(), run.id);
+    const body = `Stopped after ${AUTO_STOP_AFTER / HOUR} hours. Edit the entry on the Time page if that's wrong.`;
+    createNotification({ type: "time", title: `Timer stopped: ${run.activity}`, body });
+    await pushToAll({ title: `Timer stopped: ${run.activity}`, body, url: "/#/time", tag: "time-forgotten" });
+    return "stopped";
+  }
+  if (age >= NUDGE_AFTER && getSetting("time_nudged") !== String(run.id)) {
+    setSetting("time_nudged", run.id); // once per timer
+    const body = `Running for ${Math.floor(age / HOUR)} hours. Tap to stop or keep going.`;
+    createNotification({ type: "time", title: `Still tracking ${run.activity}?`, body });
+    await pushToAll({ title: `Still tracking ${run.activity}?`, body, url: "/#/time", tag: "time-forgotten" });
+    return "nudged";
+  }
+  return null;
 }
 
 // Just after each full hour inside the window, ask about the hour that ended (unless it's mostly logged already).
@@ -94,8 +129,11 @@ export default {
       const t = Number.isFinite(Number(body?.hour_start)) ? Number(body.hour_start) : new Date(body?.hour_start).getTime();
       if (!Number.isFinite(t) || t > Date.now()) throw httpError(400, "Bad hour");
       const start = new Date(t).toISOString(), end = new Date(t + HOUR).toISOString();
-      db.prepare("DELETE FROM time_entries WHERE source='hourly' AND start_at=?").run(start);
-      db.prepare("INSERT INTO time_entries(activity,task_id,start_at,end_at,source) VALUES (?,?,?,?,'hourly')").run(activityOf(body?.activity), taskIdOf(body?.task_id), start, end);
+      const activity = activityOf(body?.activity), task_id = taskIdOf(body?.task_id);
+      db.prepare("DELETE FROM time_entries WHERE source='hourly' AND start_at>=? AND start_at<?").run(start, end); // replaces an earlier answer
+      // only the part of the hour nothing else covers, so a timer or manual entry isn't counted twice
+      for (const [s, f] of uncovered(t, Math.min(t + HOUR, Date.now())))
+        db.prepare("INSERT INTO time_entries(activity,task_id,start_at,end_at,source) VALUES (?,?,?,?,'hourly')").run(activity, task_id, new Date(s).toISOString(), new Date(f).toISOString());
       return snapshot();
     },
     "PATCH /api/time/:id": ({ params, body }) => {
@@ -111,6 +149,9 @@ export default {
     "DELETE /api/time/:id": ({ params }) => { db.prepare("DELETE FROM time_entries WHERE id=?").run(params.id); return snapshot(); },
   },
   start() {
-    setInterval(() => maybeAskAboutHour().catch(e => console.error("time prompt", e)), 60_000).unref();
+    setInterval(() => {
+      maybeAskAboutHour().catch(e => console.error("time prompt", e));
+      checkForgottenTimer().catch(e => console.error("forgotten timer", e));
+    }, 60_000).unref();
   },
 };
