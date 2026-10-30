@@ -120,6 +120,7 @@ export default {
     "PUT /api/tasks/:id/reminders": ({ params, body }) => {
       const task = db.prepare("SELECT * FROM tasks WHERE id=? AND deleted_at IS NULL").get(params.id);
       if (!task) throw httpError(404, "Task not found");
+      if (body?.reminders !== undefined && !Array.isArray(body.reminders)) throw httpError(400, "reminders must be a list");
       const specs = (body?.reminders ?? []).map(parseSpec).slice(0, 6);
       const keep = new Set();
       for (const s of specs) {

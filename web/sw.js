@@ -22,7 +22,7 @@ self.addEventListener("push", e => {
   let data = {};
   try { data = e.data.json(); } catch { data = { title: "Daymark", body: e.data?.text() || "You have a reminder" }; }
   e.waitUntil(self.registration.showNotification(data.title || "Daymark", {
-    body: data.body || "", tag: data.tag, icon: "/icon-192.png", badge: "/badge-96.png", timestamp: Date.now(),
+    body: data.body || "", tag: data.tag, renotify: !!data.tag, // a newer notification with the same tag still buzzes icon: "/icon-192.png", badge: "/badge-96.png", timestamp: Date.now(),
     data: { url: data.url || "/", taskId: data.task_id || null },
     ...(data.task_id && { actions: [{ action: "done", title: "Mark done" }, { action: "reschedule", title: "Reschedule" }] }),
   }));

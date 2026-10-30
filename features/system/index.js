@@ -31,7 +31,7 @@ export default {
       return {
         exported_at: new Date().toISOString(),
         lists: rows("lists"), tasks: rows("tasks"), reminders: rows("reminders"), captures: rows("captures"),
-        habits: rows("habits"), habit_logs: rows("habit_logs"), notifications: rows("notifications"),
+        habits: rows("habits"), habit_logs: rows("habit_logs"), time_entries: rows("time_entries"), notifications: rows("notifications"),
       };
     },
   },

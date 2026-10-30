@@ -31,10 +31,11 @@ export function buildReport(period, anchor, now = new Date()) {
     const sched = JSON.parse(hb.days), upto = days.filter(d => d <= today);
     const scheduled = upto.filter(d => sched.includes(weekday(d))).length;
     const logs = db.prepare("SELECT day, amount FROM habit_logs WHERE habit_id=? AND day>=? AND day<=?").all(hb.id, from, to);
-    const hit = new Set(logs.map(l => l.day)).size, amount = logs.reduce((a, l) => a + l.amount, 0);
+    const hit = new Set(logs.filter(l => sched.includes(weekday(l.day))).map(l => l.day)).size; // days off the schedule don't count towards "x of y"
+    const amount = logs.reduce((a, l) => a + l.amount, 0);
     return { name: hb.name, kind: hb.kind, unit: hb.unit, scheduled, hit, amount, weekly_target: hb.weekly_target };
   });
-  const sch = habits.reduce((a, x) => a + x.scheduled, 0), hit = habits.reduce((a, x) => a + Math.min(x.hit, x.scheduled || x.hit), 0);
+  const sch = habits.reduce((a, x) => a + x.scheduled, 0), hit = habits.reduce((a, x) => a + Math.min(x.hit, x.scheduled), 0);
 
   const per = new Map(), perDay = days.map(day => ({ day, ms: 0 }));
   const nowMs = now.getTime();

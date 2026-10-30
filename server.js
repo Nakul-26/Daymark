@@ -43,7 +43,10 @@ async function readBody(req) {
     raw += chunk;
     if (raw.length > 1e6) throw Object.assign(new Error("Too large"), { status: 413 });
   }
-  try { return raw ? JSON.parse(raw) : {}; } catch { throw Object.assign(new Error("Bad JSON"), { status: 400 }); }
+  let body;
+  try { body = raw ? JSON.parse(raw) : {}; } catch { throw Object.assign(new Error("Bad JSON"), { status: 400 }); }
+  if (body === null || typeof body !== "object" || Array.isArray(body)) throw Object.assign(new Error("Bad JSON"), { status: 400 });
+  return body;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -69,7 +72,7 @@ const server = http.createServer(async (req, res) => {
     }
     // static files from /web (unknown paths fall back to index.html)
     let file = path.normalize(path.join(WEB, url.pathname === "/" ? "index.html" : url.pathname));
-    if (!file.startsWith(WEB) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(WEB, "index.html");
+    if (!file.startsWith(WEB + path.sep) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(WEB, "index.html");
     res.writeHead(200, { "Content-Type": MIME[path.extname(file)] || "application/octet-stream", "Cache-Control": "no-cache" });
     fs.createReadStream(file).pipe(res);
   } catch (e) {
