@@ -23,7 +23,7 @@ export async function pushToAll(payload) {
   let sent = 0, transient = false;
   for (const s of subs) {
     try {
-      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify(payload), { TTL: 3600 });
+      await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, JSON.stringify(payload), { TTL: 3600, urgency: "high" }); // "high" so Android doesn't hold it back while the phone is dozing
       sent++;
       db.prepare("UPDATE push_subscriptions SET last_ok_at=? WHERE id=?").run(new Date().toISOString(), s.id);
     } catch (e) {
