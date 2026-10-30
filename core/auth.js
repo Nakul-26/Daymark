@@ -15,9 +15,17 @@ export function isAuthed(req) {
   return !!m && same(m[1], token);
 }
 
+// Behind a proxy (Cloudflare tunnel, Traefik) the socket address is the proxy's, the same for everyone,
+// so one visitor's wrong guesses would lock the owner out. With TRUST_PROXY=true use the address the proxy reports.
+// Only turn that on when the app is reachable through the proxy alone: otherwise anyone could fake the header.
+const TRUST_PROXY = process.env.TRUST_PROXY === "true";
+export const clientIp = req => TRUST_PROXY
+  ? String(req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket.remoteAddress
+  : req.socket.remoteAddress;
+
 const fails = new Map(); // ip -> { n, t }
 export function login(req, password) {
-  const ip = req.socket.remoteAddress;
+  const ip = clientIp(req);
   const f = fails.get(ip);
   const recent = f && Date.now() - f.t < 600_000;
   if (recent && f.n >= 10) return { status: 429, error: "Too many attempts, wait 10 minutes" };

@@ -5,6 +5,7 @@ services:
     environment:
       PASSWORD: ${PASSWORD:?set PASSWORD in .env or the Dokploy Environment tab}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      TRUST_PROXY: ${TRUST_PROXY:-true}   # count failed logins per visitor (Cloudflare/Traefik header) instead of per proxy
       TZ_DEFAULT: ${TZ_DEFAULT:-Asia/Kolkata}
     volumes:
       - daymark-data:/data    # database + backups: back this volume up
