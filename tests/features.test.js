@@ -280,3 +280,16 @@ test("time: the hourly answer skips minutes already covered; forgotten timers ge
   assert.equal(await checkForgottenTimer(Date.now() + 8 * 3600_000), "stopped");
   assert.equal(db.prepare("SELECT COUNT(*) c FROM time_entries WHERE end_at IS NULL").get().c, 0);
 });
+
+const awaitedReports = await import("../features/reports/index.js");
+test("reports: plan check counts what was scheduled, flags overload, lists what slipped", () => {
+  const { buildReport } = awaitedReports;
+  const mk = (title, due) => r("tasks", "POST /api/tasks")({ body: { title, due } });
+  const a = mk("Plan A", today), b = mk("Plan B", today), c = mk("Plan C", today);
+  r("tasks", "POST /api/tasks/:id/complete")({ params: { id: a.id }, body: {} });
+  const p = buildReport("day", today).plan;
+  assert.ok(p.planned >= 3 && p.missed.includes("Plan B") && p.missed.includes("Plan C") && !p.missed.includes("Plan A"));
+  assert.equal(p.done + p.missedCount, p.planned);
+  assert.ok(p.verdict.length > 0);
+  assert.ok(buildReport("week", today).habits.every(x => x.missed >= 0));
+});

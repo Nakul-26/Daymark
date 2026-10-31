@@ -32,13 +32,19 @@ function body(r) {
   const week = r.period === "week", rate = r.habitRate == null ? "–" : Math.round(r.habitRate * 100) + "%";
   return [
     h("div", { class: "tiles" }, tile(r.tasks.done, "tasks done"), tile(rate, "habits done"), tile(r.time.totalMs ? fmtDur(r.time.totalMs) : "–", "tracked"), tile(r.tasks.overdue, "overdue now")),
+    r.plan.planned > 0 && h("section", { class: "group plan" }, h("h3", {}, "Did the plan fit?"),
+      h("p", { class: "verdict" }, `${r.plan.done} of ${r.plan.planned} scheduled tasks done (${Math.round(r.plan.rate * 100)}%)`),
+      h("p", {}, r.plan.verdict),
+      r.plan.capacity != null && h("small", { class: "muted" }, `You usually finish about ${r.plan.capacity} tasks on a day you work.`),
+      r.plan.extra > 0 && h("small", { class: "muted" }, `${r.plan.extra} more done that weren't scheduled for ${week ? "this week" : "this day"}.`),
+      r.plan.missedCount > 0 && [h("b", {}, `Not done (${r.plan.missedCount})`), h("ul", { class: "plain" }, r.plan.missed.map(t => h("li", {}, "○ " + t)))]),
     week && h("section", { class: "group" }, h("h3", {}, "Tasks done per day"),
       bars(r.tasks.byDay.map(d => ({ value: d.n, label: dow(d.day), title: `${shortDate(d.day)}: ${d.n}` })), Math.max(1, ...r.tasks.byDay.map(d => d.n)))),
     r.tasks.list.length > 0 && h("section", { class: "group" }, h("h3", {}, "Completed"),
       h("ul", { class: "plain" }, r.tasks.list.map(t => h("li", {}, "✓ " + t.title, week && h("span", { class: "muted" }, " · " + shortDate(t.day)))))),
     r.habits.length > 0 && h("section", { class: "group" }, h("h3", {}, "Habits"),
       h("ul", { class: "plain" }, r.habits.map(x => h("li", { class: "row" }, h("span", { class: "grow" }, x.name),
-        h("b", {}, x.kind === "amount" ? `${+x.amount.toFixed(2)} ${x.unit}`.trim() : `${x.hit}/${x.scheduled}`))))),
+        h("b", { class: x.missed ? "late" : "" }, x.kind === "amount" ? `${+x.amount.toFixed(2)} ${x.unit}`.trim() : `${x.hit}/${x.scheduled}`))))),
     h("section", { class: "group" }, h("h3", {}, "Time"),
       r.time.byActivity.length ? [
         week && bars(r.time.byDay.map(d => ({ value: d.ms, label: dow(d.day), title: `${shortDate(d.day)}: ${fmtDur(d.ms)}` })), Math.max(1, ...r.time.byDay.map(d => d.ms))),
