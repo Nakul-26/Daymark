@@ -1,5 +1,5 @@
 // Settings: timezone, reminder behaviour, push on this device, backups/export, sign out.
-import { h, toast } from "../ui.js";
+import { h, toast, confirmBox } from "../ui.js";
 import { state, render } from "../state.js";
 import { actions } from "../actions.js";
 import { api } from "../api.js";
@@ -72,5 +72,13 @@ export function renderSettings() {
         h("a", { class: "btn", href: "/api/export", download: "daymark-export.json" }, "Download all data (JSON)")),
       backups.length > 0 && h("small", { class: "muted" }, `Latest backup: ${backups[0].name} (${Math.round(backups[0].size / 1024)} KB)`)),
 
-    state.authEnabled && h("section", { class: "group" }, h("button", { onclick: () => document.dispatchEvent(new Event("daymark:logout")) }, "Sign out")));
+    state.authEnabled && h("section", { class: "group" }, h("h3", {}, "Account"),
+      h("div", { class: "row" },
+        h("button", { onclick: () => document.dispatchEvent(new Event("daymark:logout")) }, "Sign out"),
+        h("button", { class: "danger", onclick: async () => {
+          if (!confirmBox("Sign out on every device, including this one? You'll need the password again everywhere.")) return;
+          try { await api.logoutAll(); } catch (e) { return toast(e.message, { error: true }); }
+          document.dispatchEvent(new Event("daymark:logout"));
+        } }, "Sign out everywhere")),
+      h("small", { class: "muted" }, "Use this if a device was lost or someone else may have your login. Changing the password does the same.")));
 }

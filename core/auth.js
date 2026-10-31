@@ -1,10 +1,15 @@
 // Single-user auth. Set PASSWORD in the environment to require login; leave it empty for no login
 // (fine on localhost only). The cookie is a stateless HMAC, so there is no sessions table.
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { db } from "./db.js";
 
 const PASSWORD = process.env.PASSWORD || "";
 export const authEnabled = !!PASSWORD;
-const token = createHmac("sha256", PASSWORD).update("daymark-session").digest("hex");
+// The cookie is an HMAC of the password and a session number kept in the database. "Sign out everywhere" bumps the
+// number, which invalidates every cookie ever issued; changing the password does the same.
+const epoch = () => { try { return db.prepare("SELECT value FROM settings WHERE key='session_epoch'").get()?.value ?? "0"; } catch { return "0"; } };
+const token = () => createHmac("sha256", PASSWORD).update("daymark-session:" + epoch()).digest("hex");
+export const revokeAll = () => db.prepare("INSERT INTO settings(key,value) VALUES ('session_epoch', '1') ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1").run();
 const COOKIE = "dm";
 
 const same = (a, b) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
@@ -12,7 +17,7 @@ const same = (a, b) => a.length === b.length && timingSafeEqual(Buffer.from(a), 
 export function isAuthed(req) {
   if (!authEnabled) return true;
   const m = (req.headers.cookie || "").match(new RegExp(`(?:^|; )${COOKIE}=([a-f0-9]+)`));
-  return !!m && same(m[1], token);
+  return !!m && same(m[1], token());
 }
 
 // Behind a proxy (Cloudflare tunnel, Traefik) the socket address is the proxy's, the same for everyone,
@@ -35,7 +40,7 @@ export function login(req, password) {
   }
   fails.delete(ip);
   const secure = process.env.COOKIE_SECURE === "true" ? "; Secure" : "";
-  return { status: 200, cookie: `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 90}${secure}` };
+  return { status: 200, cookie: `${COOKIE}=${token()}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 90}${secure}` };
 }
 
 export const logoutCookie = () => `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;

@@ -20,6 +20,7 @@ export const api = {
   session: () => get("/api/session"),
   login: password => post("/api/login", { password }),
   logout: () => post("/api/logout"),
+  logoutAll: () => post("/api/logout-all"),
   settings: () => get("/api/settings"),
   saveSettings: s => put("/api/settings", s),
 

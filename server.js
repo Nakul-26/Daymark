@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { migrate } from "./core/db.js";
 import { buildRouter } from "./core/router.js";
-import { authEnabled, isAuthed, login, logoutCookie } from "./core/auth.js";
+import { authEnabled, isAuthed, login, logoutCookie, revokeAll } from "./core/auth.js";
 import settings from "./features/settings/index.js";
 import lists from "./features/lists/index.js";
 import tasks from "./features/tasks/index.js";
@@ -66,6 +66,7 @@ const server = http.createServer(async (req, res) => {
       }
       if (url.pathname === "/api/logout" && req.method === "POST") return send(res, 200, { ok: true }, { "Set-Cookie": logoutCookie() });
       if (!isAuthed(req)) return send(res, 401, { error: "Not signed in" });
+      if (url.pathname === "/api/logout-all" && req.method === "POST") { revokeAll(); return send(res, 200, { ok: true }, { "Set-Cookie": logoutCookie() }); }
       const out = await route(req.method, url.pathname, Object.fromEntries(url.searchParams), body);
       if (writes) console.log(JSON.stringify({ t: new Date().toISOString(), m: req.method, p: url.pathname, ms: Date.now() - started }));
       return out ? send(res, out.status, out.data) : send(res, 404, { error: "Not found" });
