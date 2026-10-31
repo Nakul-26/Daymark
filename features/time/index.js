@@ -129,11 +129,35 @@ export default {
       const t = Number.isFinite(Number(body?.hour_start)) ? Number(body.hour_start) : new Date(body?.hour_start).getTime();
       if (!Number.isFinite(t) || t > Date.now()) throw httpError(400, "Bad hour");
       const start = new Date(t).toISOString(), end = new Date(t + HOUR).toISOString();
-      const activity = activityOf(body?.activity), task_id = taskIdOf(body?.task_id);
-      db.prepare("DELETE FROM time_entries WHERE source='hourly' AND start_at>=? AND start_at<?").run(start, end); // replaces an earlier answer
-      // only the part of the hour nothing else covers, so a timer or manual entry isn't counted twice
-      for (const [s, f] of uncovered(t, Math.min(t + HOUR, Date.now())))
-        db.prepare("INSERT INTO time_entries(activity,task_id,start_at,end_at,source) VALUES (?,?,?,?,'hourly')").run(activity, task_id, new Date(s).toISOString(), new Date(f).toISOString());
+      // one activity for the whole hour, or items = [{ activity, minutes }] to split it between several things
+      const raw = Array.isArray(body?.items) ? body.items : [{ activity: body?.activity, task_id: body?.task_id }];
+      if (!raw.length || raw.length > 8) throw httpError(400, "Add between 1 and 8 things");
+      const items = raw.map(i => ({ activity: activityOf(i?.activity), task_id: taskIdOf(i?.task_id), ms: i?.minutes == null ? null : Math.round(Number(i.minutes)) * 60_000 }));
+      if (items.some(i => i.ms !== null && !(i.ms >= 60_000 && i.ms <= HOUR))) throw httpError(400, "Minutes must be between 1 and 60");
+      if (items.length > 1 && items.some(i => i.ms === null)) throw httpError(400, "Give minutes for each thing");
+      const insert = db.prepare("INSERT INTO time_entries(activity,task_id,start_at,end_at,source) VALUES (?,?,?,?,'hourly')");
+      db.exec("BEGIN");
+      try {
+        db.prepare("DELETE FROM time_entries WHERE source='hourly' AND start_at>=? AND start_at<?").run(start, end); // replaces an earlier answer
+        // only the part of the hour nothing else covers, so a timer or manual entry isn't counted twice
+        const gaps = uncovered(t, Math.min(t + HOUR, Date.now()));
+        const free = gaps.reduce((a, [s, f]) => a + f - s, 0), asked = items.reduce((a, i) => a + (i.ms ?? 0), 0);
+        if (items.some(i => i.ms !== null) && asked > free + 1000) throw httpError(400, `Only ${Math.floor(free / 60_000)} minutes of that hour are free`);
+        if (items.length === 1 && items[0].ms === null) for (const [s, f] of gaps) insert.run(items[0].activity, items[0].task_id, new Date(s).toISOString(), new Date(f).toISOString());
+        else {
+          let g = 0, at = gaps[0]?.[0] ?? 0;
+          for (const it of items) {
+            let need = it.ms ?? free;
+            while (need > 500 && g < gaps.length) {
+              const take = Math.min(need, gaps[g][1] - at);
+              if (take > 0) insert.run(it.activity, it.task_id, new Date(at).toISOString(), new Date(at + take).toISOString());
+              at += take; need -= take;
+              if (at >= gaps[g][1] - 500 && ++g < gaps.length) at = gaps[g][0];
+            }
+          }
+        }
+        db.exec("COMMIT");
+      } catch (e) { db.exec("ROLLBACK"); throw e; }
       return snapshot();
     },
     "PATCH /api/time/:id": ({ params, body }) => {

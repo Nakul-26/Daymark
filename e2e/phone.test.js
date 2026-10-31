@@ -462,10 +462,41 @@ test("time: the hourly prompt link opens a popup and logs that hour", async () =
   await settle(500);
   await shot("hour-popup");
   await tap(page.locator("dialog .pill", { hasText: "Reading" }));
+  await page.waitForSelector("dialog .hour-rows li");
+  await shot("hour-popup-one");
+  await tap(page.locator("dialog button.primary", { hasText: "Save" }));
   await page.waitForSelector(".toast:has-text('Logged')");
   const e = (await api("GET", "/api/time")).entries.find(x => x.source === "hourly");
   assert.equal(new Date(e.start_at).getTime(), hourStart);
   assert.equal(e.activity, "Reading");
+});
+
+test("time: an hour can be split between several things, and entries can be sorted", async () => {
+  const hourStart = Math.floor(Date.now() / 3600_000) * 3600_000 - 2 * 3600_000;
+  await page.goto(BASE + "/#/myday");
+  await page.reload();
+  await page.waitForSelector("main header");
+  await page.goto(BASE + "/#/hour/" + hourStart);
+  await page.waitForSelector("dialog .alarm");
+  await page.locator("dialog input[aria-label=Activity]").fill("Cooking");
+  await tap(page.locator("dialog button", { hasText: "Add" }));
+  await page.locator("dialog input[aria-label=Activity]").fill("Phone call");
+  await tap(page.locator("dialog button", { hasText: "Add" }));
+  const mins = await page.locator("dialog .hour-rows input").evaluateAll(els => els.map(e => +e.value));
+  assert.deepEqual(mins, [30, 30], "second thing splits the hour in half");
+  await shot("hour-popup-split");
+  await tap(page.locator("dialog button.primary", { hasText: "Save" }));
+  await page.waitForSelector(".toast:has-text('Cooking, Phone call')");
+  const mine = (await api("GET", "/api/time")).entries.filter(x => x.source === "hourly" && new Date(x.start_at).getTime() >= hourStart && new Date(x.start_at).getTime() < hourStart + 3600_000);
+  assert.deepEqual(mine.map(x => x.activity).sort(), ["Cooking", "Phone call"]);
+
+  await page.goto(BASE + "/#/time");
+  await page.waitForSelector(".tentries li");
+  const first = async () => page.locator(".tentries li .what").first().innerText();
+  await page.locator("select[aria-label='Sort entries']").selectOption("name");
+  assert.ok((await first()).startsWith("Cooking"), "by activity puts Cooking first");
+  await page.locator("select[aria-label='Sort entries']").selectOption("new");
+  await shot("time-sorted");
 });
 
 test("time: Track button on a task starts a timer linked to it", async () => {

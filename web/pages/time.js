@@ -28,17 +28,42 @@ export function recentActivities(n = 6) {
 const activityPills = (onPick) => recentActivities().map(a => h("button", { type: "button", class: "pill", onclick: () => onPick(a) }, a));
 
 // ---------- the popup for the hourly prompt (also opened from the "unlogged hours" list) ----------
+// Pick one or more things and give each its minutes; they fill the hour in order.
 export function openHourLog(start) {
   modal(close => {
-    const save = a => { a = a.trim(); if (a) { close(); actions.timeHour(start, a); } };
-    const input = h("input", { type: "text", placeholder: "Something else…", maxlength: 120, "aria-label": "Activity" });
-    input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); save(input.value); } });
-    const pills = activityPills(save);
+    const rows = []; // { activity, minutes }
+    const left = () => 60 - rows.reduce((s, r) => s + r.minutes, 0);
+    const list = h("ul", { class: "hour-rows" }), status = h("small", { class: "muted" });
+    const saveBtn = h("button", { type: "button", class: "primary", onclick: () => { close(); actions.timeHour(start, rows.map(r => ({ activity: r.activity, minutes: r.minutes }))); } }, "Save");
+    const input = h("input", { type: "text", placeholder: "Add something else…", maxlength: 120, "aria-label": "Activity" });
+    const add = a => {
+      a = a.trim(); if (!a) return;
+      if (rows.length < 8) {
+        let minutes = left();
+        if (minutes <= 0 && rows.length) { // the hour is full: split the last thing in half with the new one
+          const last = rows[rows.length - 1]; minutes = Math.floor(last.minutes / 2); last.minutes -= minutes;
+        }
+        rows.push({ activity: a, minutes: Math.max(1, minutes) });
+      }
+      input.value = ""; draw();
+    };
+    const draw = () => {
+      list.replaceChildren(...rows.map((r, i) => h("li", {},
+        h("span", { class: "grow" }, r.activity),
+        h("input", { type: "number", min: 1, max: 60, value: r.minutes, "aria-label": `Minutes for ${r.activity}`, onchange: e => { r.minutes = Math.min(60, Math.max(1, Math.round(+e.target.value) || 1)); draw(); } }),
+        h("span", { class: "muted" }, "min"),
+        h("button", { type: "button", class: "x", "aria-label": "Remove " + r.activity, onclick: () => { rows.splice(i, 1); draw(); } }, "×"))));
+      status.textContent = !rows.length ? "Tap what you did. Add more than one to split the hour." : left() > 0 ? `${left()} min not logged` : left() < 0 ? `${-left()} min too many` : "The whole hour is logged";
+      saveBtn.disabled = !rows.length || left() < 0;
+    };
+    input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); add(input.value); } });
+    draw();
     return h("div", { class: "task-form alarm" },
       h("h3", {}, `What did you do ${hourOf(start)}–${hourOf(start + HOUR)}?`),
-      pills.length > 0 && h("div", { class: "pills" }, pills),
-      h("div", { class: "row" }, input, h("button", { type: "button", class: "primary", onclick: () => save(input.value) }, "Save")),
-      h("div", { class: "row actions" }, h("span", { class: "grow" }), h("button", { type: "button", onclick: close }, "Skip")));
+      activityPills(add).length > 0 && h("div", { class: "pills" }, activityPills(add)),
+      h("div", { class: "row" }, input, h("button", { type: "button", onclick: () => add(input.value) }, "Add")),
+      list, status,
+      h("div", { class: "row actions" }, h("span", { class: "grow" }), h("button", { type: "button", onclick: close }, "Skip"), saveBtn));
   });
 }
 
@@ -119,17 +144,26 @@ export function unloggedHours(now = Date.now()) {
   return out;
 }
 
+const SORTS = { new: "Newest first", old: "Oldest first", long: "Longest first", name: "By activity" };
+const SORT_FNS = {
+  new: (a, b) => startMs(b) - startMs(a), old: (a, b) => startMs(a) - startMs(b),
+  long: (a, b) => durOf(b) - durOf(a), name: (a, b) => a.activity.localeCompare(b.activity) || startMs(a) - startMs(b),
+};
+
 function todayView() {
   const today = isoDay(), mine = entries().filter(e => dayOf(e.start_at) === today);
-  const unlogged = unloggedHours();
+  const unlogged = unloggedHours(), sort = SORTS[pref.get("timeSort", "new")] ? pref.get("timeSort", "new") : "new";
   const total = mine.reduce((s, e) => s + durOf(e), 0);
   return [
     h("section", { class: "group" }, h("h3", {}, `Today · ${fmtDur(total)} tracked`),
       mine.length ? bars(totalsBy(mine)) : h("p", { class: "muted" }, "Nothing tracked yet today.")),
     unlogged.length > 0 && h("section", { class: "group" }, h("h3", {}, `Unlogged hours (${unlogged.length})`),
       h("div", { class: "pills" }, unlogged.map(s => h("button", { class: "pill", onclick: () => openHourLog(s) }, `${hourOf(s)}–${hourOf(s + HOUR)}`)))),
-    mine.length > 0 && h("section", { class: "group" }, h("h3", {}, "Entries"),
-      h("ul", { class: "tentries" }, mine.map(e => h("li", { onclick: () => editEntry(e) },
+    mine.length > 0 && h("section", { class: "group" },
+      h("div", { class: "row" }, h("h3", { class: "grow" }, "Entries"),
+        h("select", { class: "sort", "aria-label": "Sort entries", onchange: e => { pref.set("timeSort", e.target.value); render(); } },
+          Object.entries(SORTS).map(([k, label]) => h("option", { value: k, selected: sort === k }, label)))),
+      h("ul", { class: "tentries" }, [...mine].sort(SORT_FNS[sort]).map(e => h("li", { onclick: () => editEntry(e) },
         h("span", { class: "when" }, `${clockOf(startMs(e))}${e.end_at ? "–" + clockOf(endMs(e)) : " – now"}`),
         h("span", { class: "what" }, e.activity, e.source === "hourly" && h("small", { class: "muted" }, " · hourly")),
         h("b", {}, fmtDur(durOf(e))))))),

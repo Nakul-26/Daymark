@@ -182,7 +182,7 @@ export const actions = {
     state.time = await api.timeStop();
   }),
   timeAdd: e => act(async () => { state.time = await api.timeAdd(e); }),
-  timeHour: (start, activity) => act(async () => { state.time = await api.timeHour(start, activity); toast("Logged: " + activity); }),
+  timeHour: (start, items) => act(async () => { state.time = await api.timeHour(start, items); toast("Logged: " + items.map(i => i.activity).join(", ")); }),
   timeEdit: (id, p) => act(async () => { state.time = await api.timeEdit(id, p); }),
   timeDelete: id => act(async () => { state.time = await api.timeDelete(id); }),
 

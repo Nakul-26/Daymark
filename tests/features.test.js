@@ -293,3 +293,17 @@ test("reports: plan check counts what was scheduled, flags overload, lists what 
   assert.ok(p.verdict.length > 0);
   assert.ok(buildReport("week", today).habits.every(x => x.missed >= 0));
 });
+
+test("time: an hour can be split between several things, never past what is free", () => {
+  const T = k => mods.time.routes[k];
+  const hour = Math.floor((Date.now() - 30 * 3600_000) / 3600_000) * 3600_000;
+  const snap = T("POST /api/time/hour")({ body: { hour_start: hour, items: [{ activity: "Cook", minutes: 20 }, { activity: "Call", minutes: 40 }] } });
+  const mine = snap.entries.filter(e => e.source === "hourly" && new Date(e.start_at).getTime() >= hour && new Date(e.start_at).getTime() < hour + 3600_000)
+    .sort((a, b) => a.start_at.localeCompare(b.start_at));
+  assert.deepEqual(mine.map(e => e.activity), ["Cook", "Call"]);
+  assert.equal(new Date(mine[0].end_at).getTime(), hour + 20 * 60_000);
+  assert.equal(new Date(mine[1].end_at).getTime(), hour + 60 * 60_000);
+  assert.throws(() => T("POST /api/time/hour")({ body: { hour_start: hour, items: [{ activity: "A", minutes: 50 }, { activity: "B", minutes: 30 }] } }), /free/);
+  assert.equal(db.prepare("SELECT COUNT(*) c FROM time_entries WHERE source='hourly' AND start_at>=? AND start_at<?").get(new Date(hour).toISOString(), new Date(hour + 3600_000).toISOString()).c, 2, "a failed answer keeps the earlier one");
+  assert.throws(() => T("POST /api/time/hour")({ body: { hour_start: hour, items: [{ activity: "A", minutes: 30 }, { activity: "B" }] } }), /minutes/);
+});
