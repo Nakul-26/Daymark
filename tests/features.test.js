@@ -253,6 +253,7 @@ test("reports: day and week numbers, and the automatic report is sent once", asy
   const day = buildReport("day", today), week = buildReport("week", today);
   assert.ok(day.tasks.done >= 1 && week.tasks.done >= day.tasks.done);
   assert.equal(week.tasks.byDay.length, 7);
+  assert.ok(day.time.windowMs >= 0 && day.time.windowMs <= 14 * 3600_000, "tracked time has a window to compare against");
   assert.ok(day.habits.find(x => x.name === "Read").hit === 1);
   assert.ok(week.time.byActivity.find(x => x.activity === "Study"));
   setSetting("daily_report_time", "00:00"); setSetting("weekly_report", "off");

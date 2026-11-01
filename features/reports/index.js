@@ -79,7 +79,11 @@ export function buildReport(period, anchor, now = new Date()) {
       if (y > x) d.ms += y - x;
     }
   }
-  const time = { totalMs: perDay.reduce((a, d) => a + d.ms, 0), byDay: perDay, byActivity: [...per].map(([activity, ms]) => ({ activity, ms })).sort((a, b) => b.ms - a.ms) };
+  // What the tracked time is measured against: the waking window from Settings (default 8:00-22:00) for each day so far.
+  const mins = t => { const [a, b] = t.split(":").map(Number); return a * 60 + b; };
+  const wFrom = mins(getSetting("time_prompt_from")), wTo = Math.max(wFrom, mins(getSetting("time_prompt_to"))), nowMin = mins(timeIn(tz, now));
+  const windowMs = days.filter(d => d <= today).reduce((a, d) => a + 60_000 * (d < today ? wTo - wFrom : Math.max(0, Math.min(nowMin, wTo) - wFrom)), 0);
+  const time = { windowMs, totalMs: perDay.reduce((a, d) => a + d.ms, 0), byDay: perDay, byActivity: [...per].map(([activity, ms]) => ({ activity, ms })).sort((a, b) => b.ms - a.ms) };
 
   return { period, from, to, today, tasks, plan, habits, habitRate: sch ? hit / sch : null, habitHit: hit, habitScheduled: sch, time };
 }
@@ -98,7 +102,7 @@ function message(kind, r, prev) {
   if (p.verdict && p.planned) lines.push(p.verdict);
   const extras = [];
   if (p.extra) extras.push(`${p.extra} extra done`);
-  if (r.time.totalMs) extras.push(`${dur(r.time.totalMs)} tracked`);
+  if (r.time.totalMs) extras.push(r.time.windowMs ? `${dur(r.time.totalMs)} of ${dur(r.time.windowMs)} tracked` : `${dur(r.time.totalMs)} tracked`);
   if (r.tasks.overdue) extras.push(`${r.tasks.overdue} older overdue`);
   if (prev) extras.push(`last week ${prev.tasks.done} done`);
   if (extras.length) lines.push(extras.join(" · "));

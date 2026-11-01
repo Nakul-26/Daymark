@@ -29,9 +29,13 @@ function title(r) {
 }
 
 function body(r) {
-  const week = r.period === "week", rate = r.habitRate == null ? "–" : Math.round(r.habitRate * 100) + "%";
+  const week = r.period === "week", pct = (a, b) => (b ? ` (${Math.round(a / b * 100)}%)` : "");
   return [
-    h("div", { class: "tiles" }, tile(r.tasks.done, "tasks done"), tile(rate, "habits done"), tile(r.time.totalMs ? fmtDur(r.time.totalMs) : "–", "tracked"), tile(r.tasks.overdue, "overdue now")),
+    h("div", { class: "tiles" },
+      r.plan.planned ? tile(`${r.plan.done} / ${r.plan.planned}`, `scheduled tasks done${pct(r.plan.done, r.plan.planned)}`) : tile(r.tasks.done, "tasks done (none were scheduled)"),
+      r.habitScheduled ? tile(`${r.habitHit} / ${r.habitScheduled}`, `habits done${pct(r.habitHit, r.habitScheduled)}`) : tile("–", "no habits scheduled"),
+      r.time.totalMs ? tile(fmtDur(r.time.totalMs), r.time.windowMs ? `tracked of ${fmtDur(r.time.windowMs)} awake time${pct(Math.min(r.time.totalMs, r.time.windowMs), r.time.windowMs)}` : "tracked") : tile("–", "nothing tracked"),
+      tile(`${r.tasks.overdue}`, `overdue now, of ${r.tasks.open} open`)),
     r.plan.planned > 0 && h("section", { class: "group plan" }, h("h3", {}, "Did the plan fit?"),
       h("p", { class: "verdict" }, `${r.plan.done} of ${r.plan.planned} scheduled tasks done (${Math.round(r.plan.rate * 100)}%)`),
       h("p", {}, r.plan.verdict),
@@ -48,7 +52,7 @@ function body(r) {
     h("section", { class: "group" }, h("h3", {}, "Time"),
       r.time.byActivity.length ? [
         week && bars(r.time.byDay.map(d => ({ value: d.ms, label: dow(d.day), title: `${shortDate(d.day)}: ${fmtDur(d.ms)}` })), Math.max(1, ...r.time.byDay.map(d => d.ms))),
-        h("ul", { class: "tbars" }, r.time.byActivity.map(a => h("li", {}, h("div", { class: "tbar-top" }, h("span", {}, a.activity), h("b", {}, fmtDur(a.ms))),
+        h("ul", { class: "tbars" }, r.time.byActivity.map(a => h("li", {}, h("div", { class: "tbar-top" }, h("span", {}, a.activity), h("b", {}, fmtDur(a.ms) + (r.time.totalMs ? ` · ${Math.round(a.ms / r.time.totalMs * 100)}%` : ""))),
           h("div", { class: "tbar" }, h("i", { style: `width:${Math.round(a.ms / r.time.byActivity[0].ms * 100)}%` })))))]
         : h("p", { class: "muted" }, "Nothing tracked.")),
   ];
