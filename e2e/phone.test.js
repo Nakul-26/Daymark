@@ -100,7 +100,7 @@ test("task page: opens, no stray tap areas, scrolls, back arrow works", async ()
   const saveBottom = await page.locator("button[value=save]").evaluate(el => innerHeight - el.getBoundingClientRect().bottom);
   assert.ok(saveBottom < 100 && saveBottom >= 0, `Save bar should sit at the bottom of the screen (${Math.round(saveBottom)}px above it)`);
   const moved = await swipeUp();
-  assert.ok(moved > 50, `page should scroll with a finger swipe (moved ${moved}px)`);
+  assert.ok(moved > 20, `page should scroll with a finger swipe (moved ${moved}px)`); // the page only just overflows now that the extra reminder row is gone
   await tap(page.locator(".x.back"));
   assert.equal(await hash(), "#/myday", "back arrow returns to the list");
 });

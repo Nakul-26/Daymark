@@ -81,17 +81,14 @@ function buildTaskForm(id, close) {
   const mine = state.reminders.filter(r => r.task_id === t.id && !r.snooze);
   const picked = new Set(mine.map(r => (r.offset_min != null ? `o:${r.offset_min}` : `c:${r.custom_local}`)));
   const remDiv = h("div", {});
-  const custom = h("input", { type: "datetime-local" });
   const drawReminders = () => {
-    const addCustom = () => { if (custom.value) { picked.add("c:" + custom.value.slice(0, 16)); custom.value = ""; drawReminders(); } };
     remDiv.replaceChildren(...[
       h("div", { class: "checks" },
         ...PRESETS.map(([m, label]) => h("label", { class: "check-row" },
           h("input", { type: "checkbox", checked: picked.has(`o:${m}`), onchange: e => (e.target.checked ? picked.add(`o:${m}`) : picked.delete(`o:${m}`)) }), label)),
         ...[...picked].filter(k => k.startsWith("c:")).map(k => h("span", { class: "check-row" }, "⏰ " + k.slice(2).replace("T", " "),
           h("button", { type: "button", class: "x", title: "Remove", onclick: () => { picked.delete(k); drawReminders(); } }, "×")))),
-      h("div", { class: "row" }, custom, h("button", { type: "button", onclick: addCustom }, "Add custom")),
-      !due.value && h("p", { class: "hint" }, "“Before” reminders need a date. A custom reminder works without one.")].filter(Boolean));
+      !due.value && h("p", { class: "hint" }, "Reminders are based on the task's date and time. Set a date above first.")].filter(Boolean));
   };
 
   // subtasks
