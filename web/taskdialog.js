@@ -81,14 +81,21 @@ function buildTaskForm(id, close) {
   const mine = state.reminders.filter(r => r.task_id === t.id && !r.snooze);
   const picked = new Set(mine.map(r => (r.offset_min != null ? `o:${r.offset_min}` : `c:${r.custom_local}`)));
   const remDiv = h("div", {});
+  const extraDiv = h("div", {});
+  const custom = h("input", { type: "datetime-local" });
   const drawReminders = () => {
+    const addCustom = () => { if (custom.value) { picked.add("c:" + custom.value.slice(0, 16)); custom.value = ""; drawReminders(); } };
+    extraDiv.replaceChildren(
+      h("div", { class: "checks" }, ...[...picked].filter(k => k.startsWith("c:")).map(k => h("span", { class: "check-row" }, "⏰ " + k.slice(2).replace("T", " "),
+        h("button", { type: "button", class: "x", title: "Remove", onclick: () => { picked.delete(k); drawReminders(); } }, "×")))),
+      h("div", { class: "row" }, custom, h("button", { type: "button", onclick: addCustom }, "Add")),
+      h("p", { class: "hint" }, "One extra alert at any date and time, independent of the task's date."));
     remDiv.replaceChildren(...[
       h("div", { class: "checks" },
         ...PRESETS.map(([m, label]) => h("label", { class: "check-row" },
           h("input", { type: "checkbox", checked: picked.has(`o:${m}`), onchange: e => (e.target.checked ? picked.add(`o:${m}`) : picked.delete(`o:${m}`)) }), label)),
-        ...[...picked].filter(k => k.startsWith("c:")).map(k => h("span", { class: "check-row" }, "⏰ " + k.slice(2).replace("T", " "),
-          h("button", { type: "button", class: "x", title: "Remove", onclick: () => { picked.delete(k); drawReminders(); } }, "×")))),
-      !due.value && h("p", { class: "hint" }, "Reminders are based on the task's date and time. Set a date above first.")].filter(Boolean));
+        ),
+      !due.value && h("p", { class: "hint" }, "These reminders are based on the task's date and time. Set a date above first.")].filter(Boolean));
   };
 
   // subtasks
@@ -166,7 +173,8 @@ function buildTaskForm(id, close) {
       h("div", { class: "row" }, h("span", { class: "block-title" }, "Repeat"), freq, repeatDetail), dayBtns, endRow, limits,
       t.repeat && h("p", { class: "hint" }, "Changing the date moves only this one. Changing the repeat settings restarts the series from this date."),
       t.repeat && h("div", { class: "row" }, h("button", { type: "button", class: "danger", onclick: () => { close(); actions.saveTask(t.id, { repeat: null }, null); } }, "Stop repeating"))),
-    !isSub && h("details", { class: "block", open: picked.size > 0 }, h("summary", {}, "🔔 Reminders"), remDiv),
+    !isSub && h("details", { class: "block", open: [...picked].some(k => k[0] === "o") }, h("summary", {}, "🔔 Reminders"), remDiv),
+    !isSub && h("details", { class: "block", open: [...picked].some(k => k.startsWith("c:")) }, h("summary", {}, "⏰ Extra reminder (optional)"), extraDiv),
     !isSub && h("details", { class: "block", open: state.tasks.some(x => x.parent_id === t.id) }, h("summary", {}, "Subtasks", subsCount), subsDiv,
       h("div", { class: "row" }, newSub, addSubBtn)),
     t.done_at && h("p", { class: "hint" }, "Completed " + new Date(t.done_at).toLocaleString()),
