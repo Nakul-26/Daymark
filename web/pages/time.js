@@ -131,7 +131,7 @@ const bars = rows => {
 };
 
 // Past hours today inside the prompt window that have (almost) nothing logged.
-export function unloggedHours(now = Date.now()) {
+export function unloggedHours(now = Date.now()) { // pass the end of a past day to list that day's gaps
   const from = Number((state.settings.time_prompt_from || "08:00").slice(0, 2)), to = Number((state.settings.time_prompt_to || "22:00").slice(0, 2));
   const out = [];
   for (let hr = from; hr < to; hr++) {
@@ -150,13 +150,29 @@ const SORT_FNS = {
   long: (a, b) => durOf(b) - durOf(a), name: (a, b) => a.activity.localeCompare(b.activity) || startMs(a) - startMs(b),
 };
 
+// which day / week the Time page is looking at (resets to today when you leave the page)
+const look = { day: null, weekEnd: null };
+const OLDEST = () => addDays(isoDay(), -59); // the server keeps 60 days of entries
+const dayLabel = d => (d === isoDay() ? "Today" : d === addDays(isoDay(), -1) ? "Yesterday" : shortDate(d));
+// ‹ label › with a date picker; `step` is how many days one tap moves
+const navBar = (label, value, step, onSet) => {
+  const today = isoDay(), set = v => { onSet(v < OLDEST() ? OLDEST() : v > today ? today : v); render(); };
+  return h("div", { class: "report-nav row" },
+    h("button", { type: "button", "aria-label": "Earlier", disabled: value <= OLDEST(), onclick: () => set(addDays(value, -step)) }, "‹"),
+    h("b", { class: "grow" }, label),
+    h("input", { type: "date", "aria-label": "Pick a date", value, min: OLDEST(), max: today, onchange: e => e.target.value && set(e.target.value) }),
+    h("button", { type: "button", "aria-label": "Later", disabled: value >= today, onclick: () => set(addDays(value, step)) }, "›"));
+};
+
 function todayView() {
-  const today = isoDay(), mine = entries().filter(e => dayOf(e.start_at) === today);
-  const unlogged = unloggedHours(), sort = SORTS[pref.get("timeSort", "new")] ? pref.get("timeSort", "new") : "new";
+  const today = isoDay(), day = look.day && look.day <= today ? look.day : today, isToday = day === today;
+  const mine = entries().filter(e => dayOf(e.start_at) === day);
+  const unlogged = unloggedHours(isToday ? Date.now() : new Date(day + "T23:59:59").getTime()), sort = SORTS[pref.get("timeSort", "new")] ? pref.get("timeSort", "new") : "new";
   const total = mine.reduce((s, e) => s + durOf(e), 0);
   return [
-    h("section", { class: "group" }, h("h3", {}, `Today · ${fmtDur(total)} tracked`),
-      mine.length ? bars(totalsBy(mine)) : h("p", { class: "muted" }, "Nothing tracked yet today.")),
+    navBar(dayLabel(day), day, 1, v => { look.day = v; }),
+    h("section", { class: "group" }, h("h3", {}, `${dayLabel(day)} · ${fmtDur(total)} tracked`),
+      mine.length ? bars(totalsBy(mine)) : h("p", { class: "muted" }, isToday ? "Nothing tracked yet today." : "Nothing tracked this day.")),
     unlogged.length > 0 && h("section", { class: "group" }, h("h3", {}, `Unlogged hours (${unlogged.length})`),
       h("div", { class: "pills" }, unlogged.map(s => h("button", { class: "pill", onclick: () => openHourLog(s) }, `${hourOf(s)}–${hourOf(s + HOUR)}`)))),
     mine.length > 0 && h("section", { class: "group" },
@@ -171,16 +187,18 @@ function todayView() {
 }
 
 function weekView() {
-  const today = isoDay(), days = Array.from({ length: 7 }, (_, i) => addDays(today, i - 6));
+  const today = isoDay(), end = look.weekEnd && look.weekEnd <= today ? look.weekEnd : today;
+  const days = Array.from({ length: 7 }, (_, i) => addDays(end, i - 6));
   const per = new Map(days.map(d => [d, 0]));
   const week = entries().filter(e => per.has(dayOf(e.start_at)));
   for (const e of week) per.set(dayOf(e.start_at), per.get(dayOf(e.start_at)) + durOf(e));
   const max = Math.max(1, ...per.values());
   return [
-    h("section", { class: "group" }, h("h3", {}, `Last 7 days · ${fmtDur([...per.values()].reduce((a, b) => a + b, 0))}`),
-      h("div", { class: "bars" }, days.map(d => h("div", { class: "barcol", title: `${shortDate(d)}: ${fmtDur(per.get(d))}` },
+    navBar(end === today ? "Last 7 days" : `${shortDate(days[0])} – ${shortDate(end)}`, end, 7, v => { look.weekEnd = v; }),
+    h("section", { class: "group" }, h("h3", {}, `${end === today ? "Last 7 days" : "7 days"} · ${fmtDur([...per.values()].reduce((a, b) => a + b, 0))}`),
+      h("div", { class: "bars" }, days.map(d => h("div", { class: "barcol", style: "cursor:pointer", onclick: () => { look.day = d; pref.set("timeTab", "today"); render(); }, title: `${shortDate(d)}: ${fmtDur(per.get(d))}` },
         h("div", { class: "barfill", style: `height:${Math.round(per.get(d) / max * 100)}%` }), h("span", {}, d.slice(8)))))),
-    h("section", { class: "group" }, h("h3", {}, "By activity"), week.length ? bars(totalsBy(week)) : h("p", { class: "muted" }, "Nothing tracked this week.")),
+    h("section", { class: "group" }, h("h3", {}, "By activity"), week.length ? bars(totalsBy(week)) : h("p", { class: "muted" }, "Nothing tracked in these 7 days.")),
   ];
 }
 
@@ -192,6 +210,6 @@ export function renderTime() {
       h("h2", { class: "grow" }, "Time"),
       h("button", { onclick: () => editEntry() }, "+ Add")),
     timerCard(),
-    h("div", { class: "pills" }, [["today", "Today"], ["week", "Week"]].map(([k, l]) => h("button", { class: "pill" + (tab === k ? " on" : ""), onclick: () => { pref.set("timeTab", k); render(); } }, l))),
+    h("div", { class: "pills" }, [["today", "Day"], ["week", "Week"]].map(([k, l]) => h("button", { class: "pill" + (tab === k ? " on" : ""), onclick: () => { pref.set("timeTab", k); render(); } }, l))),
     ...(tab === "week" ? weekView() : todayView()).filter(Boolean));
 }

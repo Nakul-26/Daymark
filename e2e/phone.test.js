@@ -499,6 +499,25 @@ test("time: an hour can be split between several things, and entries can be sort
   await shot("time-sorted");
 });
 
+test("time: look at yesterday and earlier days, and last week", async () => {
+  const y = new Date(Date.now() - 86400_000 * 2); y.setHours(10, 0, 0, 0);
+  await api("POST", "/api/time", { activity: "Old project", start_at: y.toISOString(), end_at: new Date(y.getTime() + 5400_000).toISOString() });
+  await page.goto(BASE + "/#/time");
+  await page.reload();
+  await page.waitForSelector(".time-page .report-nav");
+  assert.equal(await page.locator(".time-page .report-nav button[aria-label=Later]").isDisabled(), true, "can't go past today");
+  await tap(page.locator(".time-page .report-nav button[aria-label=Earlier]"));
+  await page.waitForSelector(".time-page h3:has-text('Yesterday')");
+  await tap(page.locator(".time-page .report-nav button[aria-label=Earlier]"));
+  await page.waitForSelector(".time-page .tbars li:has-text('Old project')");
+  assert.ok(await page.locator(".time-page h3", { hasText: "1h 30m tracked" }).count(), "that day's total");
+  await shot("time-past-day");
+  await tap(page.locator(".time-page .pill", { hasText: "Week" }));
+  await tap(page.locator(".time-page .report-nav button[aria-label=Earlier]"));
+  await page.waitForSelector(".time-page .report-nav b:not(:has-text('Last 7 days'))");
+  await shot("time-past-week");
+});
+
 test("time: Track button on a task starts a timer linked to it", async () => {
   const t = await api("POST", "/api/tasks", { title: "Write report" });
   await page.goto(BASE + "/#/myday");

@@ -411,3 +411,4 @@ li.task.overdue > .main .title { font-weight: 600; }
 .hour-rows .grow { min-width: 0; overflow-wrap: anywhere; }
 .hour-rows input[type=number] { flex: 0 0 4.5em; width: 4.5em; min-width: 0; text-align: center; padding-left: 4px; padding-right: 4px; }
 .time-page .row select.sort { max-width: 150px; font-size: 13px; }
+.time-page .report-nav input[type=date] { width: 9.5em; flex: 0 0 auto; }
