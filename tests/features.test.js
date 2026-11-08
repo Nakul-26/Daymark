@@ -308,3 +308,13 @@ test("time: an hour can be split between several things, never past what is free
   assert.equal(db.prepare("SELECT COUNT(*) c FROM time_entries WHERE source='hourly' AND start_at>=? AND start_at<?").get(new Date(hour).toISOString(), new Date(hour + 3600_000).toISOString()).c, 2, "a failed answer keeps the earlier one");
   assert.throws(() => T("POST /api/time/hour")({ body: { hour_start: hour, items: [{ activity: "A", minutes: 30 }, { activity: "B" }] } }), /minutes/);
 });
+
+test("time: plan an hour ahead, change it, clear it, and the hourly prompt mentions it", () => {
+  const plan = r("time", "PUT /api/time/plan"), at = Date.now() + 3600_000;
+  assert.equal(plan({ body: { hour_start: at, activity: "  Study  " } }).plans.find(p => p.hour_start === at).activity, "Study");
+  assert.equal(plan({ body: { hour_start: at, activity: "Emails" } }).plans.filter(p => p.hour_start === at).length, 1, "one plan per hour");
+  assert.equal(plan({ body: { hour_start: at, activity: "" } }).plans.some(p => p.hour_start === at), false, "empty clears");
+  assert.throws(() => plan({ body: { hour_start: Date.now() - 5 * 3600_000, activity: "x" } }), /current hour/);
+  assert.throws(() => plan({ body: { hour_start: Date.now() + 3 * 86400_000, activity: "x" } }), /current hour/);
+  assert.throws(() => plan({ body: { hour_start: at, activity: "x".repeat(200) } }), /1-120/);
+});

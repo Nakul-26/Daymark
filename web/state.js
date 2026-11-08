@@ -2,7 +2,7 @@
 import { api } from "./api.js";
 
 export const state = {
-  tasks: [], lists: [], reminders: [], captures: [], habits: [], habitLogs: [], notifications: [], time: { entries: [], running: null },
+  tasks: [], lists: [], reminders: [], captures: [], habits: [], habitLogs: [], notifications: [], time: { entries: [], running: null, plans: [] },
   settings: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, default_reminder_time: "09:00" },
   route: "myday",          // see app.js for the list
   menu: false,             // mobile sidebar open

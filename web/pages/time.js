@@ -34,7 +34,17 @@ export function openHourLog(start) {
     const rows = []; // { activity, minutes }
     const left = () => 60 - rows.reduce((s, r) => s + r.minutes, 0);
     const list = h("ul", { class: "hour-rows" }), status = h("small", { class: "muted" });
-    const saveBtn = h("button", { type: "button", class: "primary", onclick: () => { close(); actions.timeHour(start, rows.map(r => ({ activity: r.activity, minutes: r.minutes }))); } }, "Save");
+    // what you intend to do in the hour after this one (only offered while that hour is still under way or ahead)
+    const next = start + HOUR, canPlan = next + HOUR > Date.now();
+    const before = state.time.plans.find(p => p.hour_start === next)?.activity ?? "";
+    const plan = h("input", { type: "text", placeholder: "e.g. Study, emails… (optional)", maxlength: 120, value: before, list: "recent-activities", "aria-label": "Next hour" });
+    const planChanged = () => canPlan && plan.value.trim() !== before;
+    const save = async () => {
+      close();
+      if (rows.length) await actions.timeHour(start, rows.map(r => ({ activity: r.activity, minutes: r.minutes })));
+      if (planChanged()) await actions.timePlan(next, plan.value);
+    };
+    const saveBtn = h("button", { type: "button", class: "primary", onclick: save }, "Save");
     const input = h("input", { type: "text", placeholder: "Add something else…", maxlength: 120, "aria-label": "Activity" });
     const add = a => {
       a = a.trim(); if (!a) return;
@@ -54,16 +64,35 @@ export function openHourLog(start) {
         h("span", { class: "muted" }, "min"),
         h("button", { type: "button", class: "x", "aria-label": "Remove " + r.activity, onclick: () => { rows.splice(i, 1); draw(); } }, "×"))));
       status.textContent = !rows.length ? "Tap what you did. Add more than one to split the hour." : left() > 0 ? `${left()} min not logged` : left() < 0 ? `${-left()} min too many` : "The whole hour is logged";
-      saveBtn.disabled = !rows.length || left() < 0;
+      saveBtn.disabled = rows.length ? left() < 0 : !planChanged();
     };
     input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); add(input.value); } });
+    plan.addEventListener("input", draw);
     draw();
+    const planned = state.time.plans.find(p => p.hour_start === start)?.activity; // what you said you'd do in this hour
     return h("div", { class: "task-form alarm" },
       h("h3", {}, `What did you do ${hourOf(start)}–${hourOf(start + HOUR)}?`),
-      activityPills(add).length > 0 && h("div", { class: "pills" }, activityPills(add)),
+      h("div", { class: "pills" }, planned && h("button", { type: "button", class: "pill", onclick: () => add(planned) }, "📌 Planned: " + planned), activityPills(add)),
       h("div", { class: "row" }, input, h("button", { type: "button", onclick: () => add(input.value) }, "Add")),
       list, status,
+      canPlan && h("label", { class: "next-hour" }, `Next hour, ${hourOf(next)}–${hourOf(next + HOUR)}: what will you do?`, plan),
+      h("datalist", { id: "recent-activities" }, recentActivities(12).map(a => h("option", { value: a }))),
       h("div", { class: "row actions" }, h("span", { class: "grow" }), h("button", { type: "button", onclick: close }, "Skip"), saveBtn));
+  });
+}
+
+// ---------- plan an hour ahead ----------
+export function openPlan(hour) {
+  modal(close => {
+    const cur = state.time.plans.find(p => p.hour_start === hour)?.activity ?? "";
+    const input = h("input", { type: "text", maxlength: 120, value: cur, list: "recent-activities", placeholder: "What will you do?", "aria-label": "Plan", required: true });
+    return h("form", { class: "task-form", onsubmit: e => { e.preventDefault(); close(); actions.timePlan(hour, input.value); } },
+      h("h3", {}, `Plan ${hourOf(hour)}–${hourOf(hour + HOUR)}`),
+      h("datalist", { id: "recent-activities" }, recentActivities(12).map(a => h("option", { value: a }))),
+      input, h("div", { class: "pills" }, activityPills(a => { input.value = a; })),
+      h("div", { class: "row actions" },
+        cur && h("button", { type: "button", class: "danger", onclick: () => { close(); actions.timePlan(hour, ""); } }, "Clear"),
+        h("span", { class: "grow" }), h("button", { type: "button", onclick: close }, "Cancel"), h("button", { class: "primary" }, "Save")));
   });
 }
 
@@ -164,6 +193,16 @@ const navBar = (label, value, step, onSet) => {
     h("button", { type: "button", "aria-label": "Later", disabled: value >= today, onclick: () => set(addDays(value, step)) }, "›"));
 };
 
+// the hour under way and the next ones, each with what you planned (tap to change)
+function planSection() {
+  const now = Date.now(), plans = state.time.plans.filter(p => p.hour_start + HOUR > now);
+  const first = (() => { const d = new Date(now); d.setMinutes(0, 0, 0); return d.getTime(); })(); // local start of this hour
+  return h("section", { class: "group" },
+    h("div", { class: "row" }, h("h3", { class: "grow" }, "Planned"), h("button", { type: "button", onclick: () => openPlan(first + HOUR) }, "+ Next hour")),
+    plans.length ? h("ul", { class: "tentries" }, plans.map(p => h("li", { onclick: () => openPlan(p.hour_start) },
+      h("span", { class: "when" }, `${hourOf(p.hour_start)}–${hourOf(p.hour_start + HOUR)}`), h("span", { class: "what" }, p.activity)))) : h("p", { class: "muted" }, "Nothing planned. Plan the next hour, or answer the hourly prompt."));
+}
+
 function todayView() {
   const today = isoDay(), day = look.day && look.day <= today ? look.day : today, isToday = day === today;
   const mine = entries().filter(e => dayOf(e.start_at) === day);
@@ -173,6 +212,7 @@ function todayView() {
     navBar(dayLabel(day), day, 1, v => { look.day = v; }),
     h("section", { class: "group" }, h("h3", {}, `${dayLabel(day)} · ${fmtDur(total)} tracked`),
       mine.length ? bars(totalsBy(mine)) : h("p", { class: "muted" }, isToday ? "Nothing tracked yet today." : "Nothing tracked this day.")),
+    isToday && planSection(),
     unlogged.length > 0 && h("section", { class: "group" }, h("h3", {}, `Unlogged hours (${unlogged.length})`),
       h("div", { class: "pills" }, unlogged.map(s => h("button", { class: "pill", onclick: () => openHourLog(s) }, `${hourOf(s)}–${hourOf(s + HOUR)}`)))),
     mine.length > 0 && h("section", { class: "group" },

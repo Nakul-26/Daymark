@@ -518,6 +518,28 @@ test("time: look at yesterday and earlier days, and last week", async () => {
   await shot("time-past-week");
 });
 
+test("time: the hourly popup also takes a plan for the next hour, shown under Planned", async () => {
+  const d = new Date(); d.setMinutes(0, 0, 0);
+  await page.goto(BASE + "/#/time");
+  await page.reload();
+  await page.waitForSelector(".time-page .report-nav");
+  await tap(page.locator(".time-page .pill", { hasText: "Day" })); // an earlier test may have left the Week tab open
+  await tap(page.locator(".time-page section button", { hasText: "+ Next hour" }));
+  await page.locator("dialog input[aria-label=Plan]").fill("Deep work");
+  await tap(page.locator("dialog button.primary", { hasText: "Save" }));
+  await page.waitForSelector(".toast:has-text('Planned: Deep work')");
+  await page.waitForSelector(".time-page .tentries li:has-text('Deep work')");
+  // answering the prompt for the hour that just ended offers the next-hour field, prefilled
+  await page.goto(BASE + "/#/hour/" + (d.getTime() - 3600_000));
+  await page.waitForSelector("dialog .next-hour");
+  await shot("hour-popup-plan");
+  await page.locator("dialog .next-hour input").fill("Emails");
+  await tap(page.locator("dialog button.primary", { hasText: "Save" }));
+  await page.waitForSelector(".toast:has-text('Planned: Emails')");
+  const plans = (await api("GET", "/api/time")).plans;
+  assert.ok(plans.some(p => p.activity === "Emails" && p.hour_start === d.getTime()), "next hour planned");
+});
+
 test("time: Track button on a task starts a timer linked to it", async () => {
   const t = await api("POST", "/api/tasks", { title: "Write report" });
   await page.goto(BASE + "/#/myday");

@@ -40,6 +40,7 @@ export const api = {
   timeStart: (activity, task_id) => post("/api/time/start", { activity, task_id }),
   timeStop: () => post("/api/time/stop"),
   timeAdd: e => post("/api/time", e),
+  timePlan: (hour_start, activity) => put("/api/time/plan", { hour_start, activity }),
   timeHour: (hour_start, items) => post("/api/time/hour", { hour_start, items }),
   timeEdit: (id, p) => patch(`/api/time/${id}`, p),
   timeDelete: id => del(`/api/time/${id}`),

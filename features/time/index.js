@@ -14,7 +14,8 @@ const NUDGE_AFTER = 4 * HOUR, AUTO_STOP_AFTER = 12 * HOUR; // a timer someone fo
 const snapshot = () => {
   const since = new Date(Date.now() - KEEP_DAYS * 86400_000).toISOString();
   const entries = db.prepare("SELECT * FROM time_entries WHERE start_at>=? OR end_at IS NULL ORDER BY start_at DESC").all(since);
-  return { entries, running: entries.find(e => !e.end_at) ?? null };
+  const plans = db.prepare("SELECT hour_start, activity FROM time_plans WHERE hour_start>=? ORDER BY hour_start").all(Date.now() - 3 * HOUR);
+  return { entries, running: entries.find(e => !e.end_at) ?? null, plans };
 };
 
 const activityOf = v => {
@@ -94,7 +95,8 @@ export async function maybeAskAboutHour(now = new Date()) {
   setSetting("time_prompt_last", end); // set first: never ask twice for the same hour
   if (covered(start, end, now.getTime()) >= 0.5 * HOUR) return false;
   const label = h => new Date(`2000-01-01T${h}:00Z`).toLocaleTimeString("en", { hour: "numeric", timeZone: "UTC" });
-  await pushToAll({ title: `What did you do ${label(from)}–${label(to)}?`, body: "Tap to log it", url: `/#/hour/${start}`, tag: "time-prompt" });
+  const plan = db.prepare("SELECT activity FROM time_plans WHERE hour_start=?").get(start)?.activity;
+  await pushToAll({ title: `What did you do ${label(from)}–${label(to)}?`, body: plan ? `You planned: ${plan}. Tap to log it` : "Tap to log it", url: `/#/hour/${start}`, tag: "time-prompt" });
   return true;
 }
 
@@ -106,6 +108,8 @@ export default {
        start_at TEXT NOT NULL, end_at TEXT, source TEXT NOT NULL DEFAULT 'timer',
        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')));
      CREATE INDEX time_entries_start ON time_entries(start_at);`,
+    // what you intend to do in a given hour (hour_start = ms of the hour's start); one per hour
+    `CREATE TABLE time_plans (hour_start INTEGER PRIMARY KEY, activity TEXT NOT NULL);`,
   ],
   routes: {
     "GET /api/time": () => snapshot(),
@@ -158,6 +162,15 @@ export default {
         }
         db.exec("COMMIT");
       } catch (e) { db.exec("ROLLBACK"); throw e; }
+      return snapshot();
+    },
+    // Plan what to do in an hour: body = { hour_start (ms; the hour that is under way or a later one, up to a day ahead), activity }; empty activity clears it
+    "PUT /api/time/plan": ({ body }) => {
+      const t = Math.round(Number(body?.hour_start)), now = Date.now(); // hours start at :00 local time, which in some zones is :30 UTC, so no alignment check
+      if (!Number.isFinite(t) || t <= now - HOUR || t > now + 24 * HOUR) throw httpError(400, "Pick the current hour or a later one");
+      if (!String(body?.activity ?? "").trim()) db.prepare("DELETE FROM time_plans WHERE hour_start=?").run(t);
+      else db.prepare("INSERT INTO time_plans(hour_start,activity) VALUES (?,?) ON CONFLICT(hour_start) DO UPDATE SET activity=excluded.activity").run(t, activityOf(body.activity));
+      db.prepare("DELETE FROM time_plans WHERE hour_start<?").run(Date.now() - 7 * 86400_000);
       return snapshot();
     },
     "PATCH /api/time/:id": ({ params, body }) => {
