@@ -464,8 +464,10 @@ test("time: the hourly prompt link opens a popup and logs that hour", async () =
   await tap(page.locator("dialog .pill", { hasText: "Reading" }));
   await page.waitForSelector("dialog .hour-rows li");
   await shot("hour-popup-one");
+  assert.equal(await page.locator("dialog button.primary", { hasText: "Save" }).isDisabled(), true, "next-hour plan is required");
+  await page.locator("dialog .next-hour input").fill("Writing");
   await tap(page.locator("dialog button.primary", { hasText: "Save" }));
-  await page.waitForSelector(".toast:has-text('Logged')");
+  await page.waitForSelector(".toast:has-text('Planned: Writing')"); // the plan toast replaces the "Logged" one
   const e = (await api("GET", "/api/time")).entries.find(x => x.source === "hourly");
   assert.equal(new Date(e.start_at).getTime(), hourStart);
   assert.equal(e.activity, "Reading");
@@ -491,8 +493,8 @@ test("time: an hour can be split between several things, and entries can be sort
   assert.deepEqual(mine.map(x => x.activity).sort(), ["Cooking", "Phone call"]);
 
   await page.goto(BASE + "/#/time");
-  await page.waitForSelector(".tentries li");
-  const first = async () => page.locator(".tentries li .what").first().innerText();
+  await page.waitForSelector(".tentries:not(.plans) li");
+  const first = async () => page.locator(".tentries:not(.plans) li .what").first().innerText();
   await page.locator("select[aria-label='Sort entries']").selectOption("name");
   assert.ok((await first()).startsWith("Cooking"), "by activity puts Cooking first");
   await page.locator("select[aria-label='Sort entries']").selectOption("new");
@@ -533,6 +535,7 @@ test("time: the hourly popup also takes a plan for the next hour, shown under Pl
   await page.goto(BASE + "/#/hour/" + (d.getTime() - 3600_000));
   await page.waitForSelector("dialog .next-hour");
   await shot("hour-popup-plan");
+  assert.equal(await page.locator("dialog button.primary", { hasText: "Save" }).isDisabled(), true, "needs a plan");
   await page.locator("dialog .next-hour input").fill("Emails");
   await tap(page.locator("dialog button.primary", { hasText: "Save" }));
   await page.waitForSelector(".toast:has-text('Planned: Emails')");
